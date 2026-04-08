@@ -70,7 +70,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
           child: Text(dateLabel,
               style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 12,
                   fontWeight: FontWeight.w600,
                   color: AppColors.slate500,
                   letterSpacing: 1.1)),

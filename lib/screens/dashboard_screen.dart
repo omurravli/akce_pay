@@ -32,8 +32,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
-      bottomNavigationBar: _buildBottomNav(context, l, isDark, bottomPadding),
+      backgroundColor:
+      isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+      bottomNavigationBar:
+      _buildBottomNav(context, l, isDark, bottomPadding),
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
@@ -56,10 +58,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildHeader(
       BuildContext context, AppLocalizations l, bool isDark) {
     final appState = AkcePayApp.of(context);
+    final currentScale = appState?.textScaleFactor ?? 1.0;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
+          // Avatar
           Container(
             width: 42,
             height: 42,
@@ -89,50 +94,92 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
 
-          GestureDetector(
-            onTap: () {
-              final current = Localizations.localeOf(context);
-              appState?.setLocale(current.languageCode == 'tr'
-                  ? const Locale('en')
-                  : const Locale('tr'));
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                Localizations.localeOf(context).languageCode.toUpperCase(),
-                style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700),
-              ),
-            ),
-          ),
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: () => appState?.setThemeMode(
-                isDark ? ThemeMode.light : ThemeMode.dark),
-            child: Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withOpacity(0.1)
-                    : AppColors.slate100,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                color: isDark ? AppColors.slate400 : AppColors.slate600,
-                size: 18,
-              ),
-            ),
-          ),
+          // Settings Menu (Font, Language, Theme)
+          _buildSettingsMenu(context, appState, currentScale, isDark),
         ],
       ),
+    );
+  }
+
+  Widget _buildSettingsMenu(BuildContext context, appState, double currentScale, bool isDark) {
+    return PopupMenuButton<void>(
+      offset: const Offset(0, 45),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      color: isDark ? AppColors.cardDark : Colors.white,
+      icon: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.08) : AppColors.slate100,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          Icons.settings_outlined,
+          color: isDark ? AppColors.slate400 : AppColors.slate600,
+          size: 20,
+        ),
+      ),
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Theme and Language Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Theme Toggle
+                  IconButton(
+                    onPressed: () {
+                      appState?.setThemeMode(isDark ? ThemeMode.light : ThemeMode.dark);
+                      Navigator.pop(context);
+                    },
+                    icon: Icon(
+                      isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  // Language Toggle
+                  TextButton(
+                    onPressed: () {
+                      final current = Localizations.localeOf(context);
+                      appState?.setLocale(current.languageCode == 'tr'
+                          ? const Locale('en')
+                          : const Locale('tr'));
+                      Navigator.pop(context);
+                    },
+                    child: Text(
+                      Localizations.localeOf(context).languageCode.toUpperCase(),
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Text(
+                  "Yazı Boyutu",
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.slate400),
+                ),
+              ),
+              _FontSizeControl(
+                currentScale: currentScale,
+                isDark: isDark,
+                onChanged: (scale) {
+                  appState?.setTextScaleFactor(scale);
+                  Navigator.pop(context);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -236,18 +283,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       BuildContext context, AppLocalizations l, bool isDark) {
     final actions = [
       (
-        icon: Icons.send_rounded,
-        label: l.send,
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const SendMoneyScreen()))
+      icon: Icons.send_rounded,
+      label: l.send,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const SendMoneyScreen()))
       ),
       (
-        icon: Icons.receipt_long_rounded,
-        label: l.payBills,
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const PayBillsScreen()))
+      icon: Icons.receipt_long_rounded,
+      label: l.payBills,
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const PayBillsScreen()))
       ),
-
     ];
 
     return Padding(
@@ -263,7 +309,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: 52,
                   height: 52,
                   decoration: BoxDecoration(
-                    color: isDark ? AppColors.slate800 : AppColors.slate100,
+                    color:
+                    isDark ? AppColors.slate800 : AppColors.slate100,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
@@ -273,7 +320,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       )
                     ],
                   ),
-                  child: Icon(a.icon, color: AppColors.primary, size: 22),
+                  child:
+                  Icon(a.icon, color: AppColors.primary, size: 22),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -281,7 +329,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? AppColors.slate400 : AppColors.slate600,
+                    color: isDark
+                        ? AppColors.slate400
+                        : AppColors.slate600,
                   ),
                 ),
               ],
@@ -314,11 +364,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
-                        color: isDark ? Colors.white : AppColors.slate900)),
+                        color: isDark
+                            ? Colors.white
+                            : AppColors.slate900)),
                 Text('₺1.240 / ₺2.000',
                     style: TextStyle(
                         fontSize: 13,
-                        color: isDark ? AppColors.slate400 : AppColors.slate500,
+                        color: isDark
+                            ? AppColors.slate400
+                            : AppColors.slate500,
                         fontWeight: FontWeight.w500)),
               ],
             ),
@@ -328,9 +382,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: LinearProgressIndicator(
                 value: 0.62,
                 backgroundColor:
-                    isDark ? AppColors.slate700 : AppColors.slate200,
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                isDark ? AppColors.slate700 : AppColors.slate200,
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.primary),
                 minHeight: 8,
               ),
             ),
@@ -338,7 +392,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(l.budgetUsed,
                 style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppColors.slate400 : AppColors.slate500)),
+                    color: isDark
+                        ? AppColors.slate400
+                        : AppColors.slate500)),
           ],
         ),
       ),
@@ -349,40 +405,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
       BuildContext context, AppLocalizations l, bool isDark) {
     final transactions = [
       (
-        icon: Icons.restaurant_rounded,
-        color: AppColors.orange600,
-        bg: AppColors.orange100,
-        title: 'Starbucks',
-        subtitle: l.today,
-        amount: '-₺89,00',
-        isCredit: false,
+      icon: Icons.restaurant_rounded,
+      color: AppColors.orange600,
+      bg: AppColors.orange100,
+      title: 'Starbucks',
+      subtitle: l.today,
+      amount: '-₺89,00',
+      isCredit: false,
       ),
       (
-        icon: Icons.shopping_bag_rounded,
-        color: AppColors.blue600,
-        bg: AppColors.blue100,
-        title: 'Trendyol',
-        subtitle: l.yesterday,
-        amount: '-₺349,99',
-        isCredit: false,
+      icon: Icons.shopping_bag_rounded,
+      color: AppColors.blue600,
+      bg: AppColors.blue100,
+      title: 'Trendyol',
+      subtitle: l.yesterday,
+      amount: '-₺349,99',
+      isCredit: false,
       ),
       (
-        icon: Icons.account_balance_rounded,
-        color: AppColors.green600,
-        bg: const Color(0xFFDCFCE7),
-        title: 'Maaş',
-        subtitle: 'Mar 15',
-        amount: '+₺22.500,00',
-        isCredit: true,
+      icon: Icons.account_balance_rounded,
+      color: AppColors.green600,
+      bg: const Color(0xFFDCFCE7),
+      title: 'Maaş',
+      subtitle: 'Mar 15',
+      amount: '+₺22.500,00',
+      isCredit: true,
       ),
       (
-        icon: Icons.bolt_rounded,
-        color: AppColors.purple600,
-        bg: AppColors.purple100,
-        title: 'EDAŞ Elektrik',
-        subtitle: 'Mar 12',
-        amount: '-₺456,00',
-        isCredit: false,
+      icon: Icons.bolt_rounded,
+      color: AppColors.purple600,
+      bg: AppColors.purple100,
+      title: 'EDAŞ Elektrik',
+      subtitle: 'Mar 12',
+      amount: '-₺456,00',
+      isCredit: false,
       ),
     ];
 
@@ -397,10 +453,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : AppColors.slate900)),
+                      color:
+                      isDark ? Colors.white : AppColors.slate900)),
               GestureDetector(
-                onTap: () => Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => const ActivityScreen())),
+                onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ActivityScreen())),
                 child: Text(l.seeAll,
                     style: const TextStyle(
                         color: AppColors.primary,
@@ -415,7 +474,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               color: isDark ? AppColors.cardDark : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                  color: isDark ? AppColors.slate700 : AppColors.slate100),
+                  color: isDark
+                      ? AppColors.slate700
+                      : AppColors.slate100),
             ),
             child: Column(
               children: transactions.asMap().entries.map((entry) {
@@ -432,15 +493,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             width: 42,
                             height: 42,
                             decoration: BoxDecoration(
-                              color: isDark ? t.color.withOpacity(0.2) : t.bg,
+                              color: isDark
+                                  ? t.color.withOpacity(0.2)
+                                  : t.bg,
                               shape: BoxShape.circle,
                             ),
-                            child: Icon(t.icon, color: t.color, size: 20),
+                            child:
+                            Icon(t.icon, color: t.color, size: 20),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment:
+                              CrossAxisAlignment.start,
                               children: [
                                 Text(t.title,
                                     style: TextStyle(
@@ -463,7 +528,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               fontSize: 14,
                               color: t.isCredit
                                   ? AppColors.green600
-                                  : (isDark ? Colors.white : AppColors.slate900),
+                                  : (isDark
+                                  ? Colors.white
+                                  : AppColors.slate900),
                             ),
                           ),
                         ],
@@ -485,8 +552,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildBottomNav(
-      BuildContext context, AppLocalizations l, bool isDark, double bottomPadding) {
+  Widget _buildBottomNav(BuildContext context, AppLocalizations l,
+      bool isDark, double bottomPadding) {
     final items = [
       (icon: Icons.home_rounded, label: l.home),
       (icon: Icons.swap_horiz_rounded, label: l.activity),
@@ -509,12 +576,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           )
         ],
       ),
-      padding: EdgeInsets.only(
-        left: 8,
-        right: 8,
-        top: 8,
-        bottom: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       child: Row(
         children: items.asMap().entries.map((e) {
           final isActive = _selectedIndex == e.key;
@@ -529,7 +591,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     e.value.icon,
                     color: isActive
                         ? AppColors.primary
-                        : (isDark ? AppColors.slate500 : AppColors.slate400),
+                        : (isDark
+                        ? AppColors.slate500
+                        : AppColors.slate400),
                     size: 22,
                   ),
                   const SizedBox(height: 2),
@@ -537,16 +601,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     e.value.label,
                     style: TextStyle(
                       fontSize: 10,
-                      fontWeight:
-                          isActive ? FontWeight.bold : FontWeight.w500,
+                      fontWeight: isActive
+                          ? FontWeight.bold
+                          : FontWeight.w500,
                       color: isActive
                           ? AppColors.primary
                           : (isDark
-                              ? AppColors.slate500
-                              : AppColors.slate400),
+                          ? AppColors.slate500
+                          : AppColors.slate400),
                     ),
                   ),
                 ],
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+/// Yazı boyutu kontrol widget'ı — 3 seçenekli seçici
+class _FontSizeControl extends StatelessWidget {
+  final double currentScale;
+  final bool isDark;
+  final ValueChanged<double> onChanged;
+
+  const _FontSizeControl({
+    required this.currentScale,
+    required this.isDark,
+    required this.onChanged,
+  });
+
+  static const _steps = [1.0, 1.2, 1.4];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.08) : AppColors.slate100,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: _steps.map((step) {
+          final isSelected = (currentScale - step).abs() < 0.01;
+          final index = _steps.indexOf(step);
+          // Farklı görsel boyutlar: 11, 13.5, 16
+          final visualSize = 11.0 + (index * 2.5);
+
+          return GestureDetector(
+            onTap: () => onChanged(step),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primary : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text(
+                'A',
+                style: TextStyle(
+                  fontSize: visualSize,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected
+                      ? Colors.white
+                      : (isDark ? AppColors.slate400 : AppColors.slate600),
+                ),
               ),
             ),
           );

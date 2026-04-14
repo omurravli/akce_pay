@@ -21,10 +21,14 @@ class AkcePayApp extends StatefulWidget {
 class _AkcePayAppState extends State<AkcePayApp> {
   Locale _locale = const Locale('tr');
   ThemeMode _themeMode = ThemeMode.light;
+  double _textScaleFactor = 1.0;
 
   void setLocale(Locale locale) => setState(() => _locale = locale);
   void setThemeMode(ThemeMode mode) => setState(() => _themeMode = mode);
+  void setTextScaleFactor(double scale) =>
+      setState(() => _textScaleFactor = scale);
   bool get isDark => _themeMode == ThemeMode.dark;
+  double get textScaleFactor => _textScaleFactor;
 
   @override
   Widget build(BuildContext context) {
@@ -35,6 +39,14 @@ class _AkcePayAppState extends State<AkcePayApp> {
       darkTheme: AppTheme.dark(),
       themeMode: _themeMode,
       locale: _locale,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(_textScaleFactor),
+          ),
+          child: child!,
+        );
+      },
       localizationsDelegates: const [
         AppLocalizations.delegate,
         GlobalMaterialLocalizations.delegate,

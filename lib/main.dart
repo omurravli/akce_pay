@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
@@ -6,6 +7,14 @@ import 'screens/login_screen.dart';
 
 void main() {
   runApp(const AkcePayApp());
+}
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+  };
 }
 
 class AkcePayApp extends StatefulWidget {
@@ -39,6 +48,7 @@ class _AkcePayAppState extends State<AkcePayApp> {
       darkTheme: AppTheme.dark(),
       themeMode: _themeMode,
       locale: _locale,
+      scrollBehavior: AppScrollBehavior(),
       builder: (context, child) {
         return MediaQuery(
           data: MediaQuery.of(context).copyWith(

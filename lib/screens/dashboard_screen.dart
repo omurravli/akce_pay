@@ -15,6 +15,8 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
+  final PageController _pageController = PageController();
+  int _currentPage = 0;
 
   void _onNavTap(int index) {
     setState(() => _selectedIndex = index);
@@ -23,6 +25,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           context, MaterialPageRoute(builder: (_) => const ActivityScreen()));
       setState(() => _selectedIndex = 0);
     }
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -44,7 +52,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context, l, isDark),
-              _buildBalanceCard(context, l, isDark),
+              _buildPagerSection(context, l, isDark),
               _buildQuickActions(context, l, isDark),
               _buildMonthlySpending(context, l, isDark),
               _buildRecentTransactions(context, l, isDark),
@@ -183,6 +191,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildPagerSection(BuildContext context, AppLocalizations l, bool isDark) {
+    return Column(
+      children: [
+        SizedBox(
+          height: 200,
+          child: PageView(
+            controller: _pageController,
+            onPageChanged: (index) => setState(() => _currentPage = index),
+            children: [
+              _buildBalanceCard(context, l, isDark),
+              _buildWalletsCard(context, l, isDark),
+              _buildCardsCard(context, l, isDark),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(3, (index) {
+            final isActive = _currentPage == index;
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              height: 6,
+              width: isActive ? 16 : 6,
+              decoration: BoxDecoration(
+                color: isActive ? AppColors.primary : AppColors.slate300,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            );
+          }),
+        ),
+      ],
+    );
+  }
+
   Widget _buildBalanceCard(
       BuildContext context, AppLocalizations l, bool isDark) {
     return Padding(
@@ -216,17 +260,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     color: Colors.white.withOpacity(0.1)),
               ),
             ),
-            Positioned(
-              bottom: -15,
-              left: -15,
-              child: Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.black.withOpacity(0.08)),
-              ),
-            ),
             Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -244,7 +277,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           fontSize: 32,
                           fontWeight: FontWeight.bold,
                           letterSpacing: -1)),
-                  const SizedBox(height: 16),
+                  const Spacer(),
                   Row(
                     children: [
                       Container(
@@ -267,13 +300,117 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ],
                         ),
                       ),
-                      const Spacer(),
                     ],
                   ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWalletsCard(BuildContext context, AppLocalizations l, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: InkWell(
+        onTap: () {
+          // Detay ekranına yönlendirme yapılabilir
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                bottom: -20,
+                right: -20,
+                child: Icon(Icons.account_balance_wallet, size: 120, color: Colors.white.withOpacity(0.1)),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Ana Hesap", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    const Text("TR44 0006 2000 ... 45 90", style: TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'Monospace')),
+                    const Spacer(),
+                    const Text("Bakiye", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    const Text("₺12.450,00", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
+                      child: const Text("Vadesiz TL", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardsCard(BuildContext context, AppLocalizations l, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: InkWell(
+        onTap: () {
+          // Detay ekranına yönlendirme yapılabilir
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+            ),
+          ),
+          child: Stack(
+            children: [
+              Positioned(
+                top: 20,
+                right: 20,
+                child: Text("VISA", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 20, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Akçe Card", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    const Text("**** **** **** 1289", style: TextStyle(color: Colors.white, fontSize: 18, letterSpacing: 2)),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("VALID THRU", style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 8)),
+                            const Text("12/26", style: TextStyle(color: Colors.white, fontSize: 12)),
+                          ],
+                        ),
+                        const Icon(Icons.contactless, color: Colors.white, size: 24),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

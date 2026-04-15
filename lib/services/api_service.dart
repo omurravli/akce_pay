@@ -5,7 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class ApiService {
   // Use your computer's local IP (e.g., 192.168.1.x) for real device testing
   // 10.0.2.2 is the special alias for your host loopback interface in Android Emulator
-  static const String baseUrl = 'http://10.0.2.2:3000'; 
+  static const String baseUrl = 'http://10.159.166.3:3000';
   
   final _storage = const FlutterSecureStorage();
 

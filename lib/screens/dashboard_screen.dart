@@ -45,6 +45,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  void _showLoadBalanceDialog(BuildContext context, List<Wallet> wallets) {
+    if (wallets.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Cüzdan Bulunamadı"),
+          content: const Text("Para yüklemek için aktif bir banka hesabınız/cüzdanınız bulunmuyor. Lütfen önce bir cüzdan oluşturun."),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Kapat")),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final amountController = TextEditingController();
+    Wallet _selectedWalletInDialog = wallets.first;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("Para Yükle", style: TextStyle(fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<Wallet>(
+                value: _selectedWalletInDialog,
+                decoration: const InputDecoration(labelText: "Hesap Seçin"),
+                items: wallets.map((w) => DropdownMenuItem(
+                  value: w,
+                  child: Text("${w.walletType} - ${w.iban.substring(w.iban.length - 4)}"),
+                )).toList(),
+                onChanged: (v) {
+                  if (v != null) {
+                    setDialogState(() => _selectedWalletInDialog = v);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: "Tutar (₺)",
+                  prefixIcon: Icon(Icons.add_card),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
+            ElevatedButton(
+              onPressed: () async {
+                final amount = double.tryParse(amountController.text);
+                if (amount != null && amount > 0) {
+                  final success = await context.read<WalletProvider>().loadBalance(
+                    walletId: _selectedWalletInDialog.walletId,
+                    amount: amount,
+                    description: "Bakiye yüklendi",
+                  );
+                  if (mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(success ? "İşlem başarılı" : "İşlem başarısız")),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text("Yükle", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
@@ -59,7 +138,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.only(bottom: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -208,29 +286,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Consumer<WalletProvider>(
       builder: (context, walletProvider, _) {
         final wallets = walletProvider.wallets;
-        final itemCount = wallets.isEmpty ? 1 : wallets.length + 1; // +1 for Cards Card
+        
+        final totalBalance = wallets.fold<double>(0, (sum, wallet) => sum + wallet.balance);
+
+        final List<Widget> pages = [
+          _buildBalanceCard(context, l, isDark, totalBalance),
+          ...wallets.map((w) => _buildWalletsCard(context, l, isDark, w)),
+          _buildCardsCard(context, l, isDark),
+        ];
 
         return Column(
           children: [
             SizedBox(
               height: 200,
-              child: PageView.builder(
+              child: PageView(
                 controller: _pageController,
                 onPageChanged: (index) => setState(() => _currentPage = index),
-                itemCount: itemCount,
-                itemBuilder: (context, index) {
-                  if (index < wallets.length) {
-                    return _buildWalletsCard(context, l, isDark, wallets[index]);
-                  } else {
-                    return _buildCardsCard(context, l, isDark);
-                  }
-                },
+                children: pages,
               ),
             ),
             const SizedBox(height: 8),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(itemCount, (index) {
+              children: List.generate(pages.length, (index) {
                 final isActive = _currentPage == index;
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
@@ -250,13 +328,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  Widget _buildBalanceCard(
+      BuildContext context, AppLocalizations l, bool isDark, double totalBalance) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [AppColors.primary, AppColors.primaryDark],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: -20,
+              right: -20,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.1)),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l.totalBalance,
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 6),
+                  Text('₺${totalBalance.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: -1)),
+                  const Spacer(),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.trending_up,
+                                color: Colors.white, size: 16),
+                            const SizedBox(width: 4),
+                            Text(l.thisMonth,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWalletsCard(BuildContext context, AppLocalizations l, bool isDark, Wallet wallet) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
       child: InkWell(
-        onTap: () {
-          // Detay ekranına yönlendirme yapılabilir
-        },
+        onTap: () {},
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
@@ -304,9 +464,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
       child: InkWell(
-        onTap: () {
-          // Detay ekranına yönlendirme yapılabilir
-        },
+        onTap: () {},
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
@@ -357,6 +515,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildQuickActions(
       BuildContext context, AppLocalizations l, bool isDark) {
+    final walletProvider = context.watch<WalletProvider>();
+    
     final actions = [
       (
       icon: Icons.send_rounded,
@@ -370,47 +530,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
       onTap: () => Navigator.push(context,
           MaterialPageRoute(builder: (_) => const PayBillsScreen()))
       ),
+      (
+      icon: Icons.add_to_photos_rounded,
+      label: "Para Yükle",
+      onTap: () => _showLoadBalanceDialog(context, walletProvider.wallets)
+      ),
     ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: actions.map((a) {
           return GestureDetector(
             onTap: a.onTap,
-            child: Column(
-              children: [
-                Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color:
-                    isDark ? AppColors.slate800 : AppColors.slate100,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      )
-                    ],
+            behavior: HitTestBehavior.opaque,
+            child: SizedBox(
+              width: 80,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.slate800 : AppColors.slate100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(a.icon, color: AppColors.primary, size: 22),
                   ),
-                  child:
-                  Icon(a.icon, color: AppColors.primary, size: 22),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  a.label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: isDark
-                        ? AppColors.slate400
-                        : AppColors.slate600,
+                  const SizedBox(height: 6),
+                  Text(
+                    a.label,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AppColors.slate400 : AppColors.slate600,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         }).toList(),
@@ -697,7 +857,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-/// Yazı boyutu kontrol widget'ı — 3 seçenekli seçici
 class _FontSizeControl extends StatelessWidget {
   final double currentScale;
   final bool isDark;
@@ -724,7 +883,6 @@ class _FontSizeControl extends StatelessWidget {
         children: _steps.map((step) {
           final isSelected = (currentScale - step).abs() < 0.01;
           final index = _steps.indexOf(step);
-          // Farklı görsel boyutlar: 11, 13.5, 16
           final visualSize = 11.0 + (index * 2.5);
 
           return GestureDetector(

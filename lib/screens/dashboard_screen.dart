@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
 import '../main.dart';
+import '../providers/auth_provider.dart';
+import '../providers/wallet_provider.dart';
+import '../models/wallet.dart';
 import 'send_money_screen.dart';
 import 'pay_bills_screen.dart';
 import 'activity_screen.dart';
@@ -17,6 +21,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
   final PageController _pageController = PageController();
   int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<WalletProvider>().fetchWallets();
+    });
+  }
 
   void _onNavTap(int index) {
     setState(() => _selectedIndex = index);
@@ -67,6 +79,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       BuildContext context, AppLocalizations l, bool isDark) {
     final appState = AkcePayApp.of(context);
     final currentScale = appState?.textScaleFactor ?? 1.0;
+    final user = context.watch<AuthProvider>().user;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -82,9 +95,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 colors: [AppColors.primary, AppColors.primaryDark],
               ),
             ),
-            child: const Center(
-              child: Text('A',
-                  style: TextStyle(
+            child: Center(
+              child: Text(user?.username.substring(0, 1).toUpperCase() ?? 'A',
+                  style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 18)),
@@ -93,7 +106,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '${l.goodMorning} Alex',
+              '${l.goodMorning} ${user?.username ?? ''}',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -192,126 +205,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildPagerSection(BuildContext context, AppLocalizations l, bool isDark) {
-    return Column(
-      children: [
-        SizedBox(
-          height: 200,
-          child: PageView(
-            controller: _pageController,
-            onPageChanged: (index) => setState(() => _currentPage = index),
-            children: [
-              _buildBalanceCard(context, l, isDark),
-              _buildWalletsCard(context, l, isDark),
-              _buildCardsCard(context, l, isDark),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(3, (index) {
-            final isActive = _currentPage == index;
-            return AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              height: 6,
-              width: isActive ? 16 : 6,
-              decoration: BoxDecoration(
-                color: isActive ? AppColors.primary : AppColors.slate300,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
+    return Consumer<WalletProvider>(
+      builder: (context, walletProvider, _) {
+        final wallets = walletProvider.wallets;
+        final itemCount = wallets.isEmpty ? 1 : wallets.length + 1; // +1 for Cards Card
 
-  Widget _buildBalanceCard(
-      BuildContext context, AppLocalizations l, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [AppColors.primary, AppColors.primaryDark],
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withOpacity(0.3),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Stack(
+        return Column(
           children: [
-            Positioned(
-              top: -20,
-              right: -20,
-              child: Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.1)),
+            SizedBox(
+              height: 200,
+              child: PageView.builder(
+                controller: _pageController,
+                onPageChanged: (index) => setState(() => _currentPage = index),
+                itemCount: itemCount,
+                itemBuilder: (context, index) {
+                  if (index < wallets.length) {
+                    return _buildWalletsCard(context, l, isDark, wallets[index]);
+                  } else {
+                    return _buildCardsCard(context, l, isDark);
+                  }
+                },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l.totalBalance,
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 6),
-                  const Text('₺14.582,50',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: -1)),
-                  const Spacer(),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.trending_up,
-                                color: Colors.white, size: 16),
-                            const SizedBox(width: 4),
-                            Text(l.thisMonth,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500)),
-                          ],
-                        ),
-                      ),
-                    ],
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(itemCount, (index) {
+                final isActive = _currentPage == index;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  height: 6,
+                  width: isActive ? 16 : 6,
+                  decoration: BoxDecoration(
+                    color: isActive ? AppColors.primary : AppColors.slate300,
+                    borderRadius: BorderRadius.circular(3),
                   ),
-                ],
-              ),
+                );
+              }),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildWalletsCard(BuildContext context, AppLocalizations l, bool isDark) {
+  Widget _buildWalletsCard(BuildContext context, AppLocalizations l, bool isDark, Wallet wallet) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
       child: InkWell(
@@ -339,17 +278,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Ana Hesap", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+                    Text(wallet.walletType == 'TL' ? "Ana Hesap" : "Döviz Hesabı", style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 4),
-                    const Text("TR44 0006 2000 ... 45 90", style: TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'Monospace')),
+                    Text(wallet.iban, style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'Monospace')),
                     const Spacer(),
                     const Text("Bakiye", style: TextStyle(color: Colors.white70, fontSize: 12)),
-                    const Text("₺12.450,00", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text("₺${wallet.balance.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
-                      child: const Text("Vadesiz TL", style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      child: Text("Vadesiz ${wallet.walletType}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

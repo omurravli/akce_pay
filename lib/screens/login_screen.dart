@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
 import '../main.dart';
+import '../providers/auth_provider.dart';
 import 'dashboard_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -23,10 +25,32 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _login() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const DashboardScreen()),
-    );
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lütfen tüm alanları doldurun')),
+      );
+      return;
+    }
+
+    final success = await context.read<AuthProvider>().login(email, password);
+
+    if (success) {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Giriş başarısız. Email veya şifre hatalı.')),
+        );
+      }
+    }
   }
 
   @override
@@ -210,33 +234,46 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 20),
 
-                    SizedBox(
-                      width: double.infinity,
-                      height: 54,
-                      child: ElevatedButton.icon(
-                        onPressed: _login,
-                        icon: const SizedBox.shrink(),
-                        label: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(l.login,
-                                style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white)),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.arrow_forward,
-                                size: 18, color: Colors.white),
-                          ],
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          elevation: 3,
-                          shadowColor: AppColors.primary.withOpacity(0.4),
-                        ),
-                      ),
+                    Consumer<AuthProvider>(
+                      builder: (context, auth, _) {
+                        return SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: ElevatedButton.icon(
+                            onPressed: auth.isLoading ? null : _login,
+                            icon: auth.isLoading
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2),
+                                  )
+                                : const SizedBox.shrink(),
+                            label: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(auth.isLoading ? '...' : l.login,
+                                    style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white)),
+                                if (!auth.isLoading) ...[
+                                  const SizedBox(width: 8),
+                                  const Icon(Icons.arrow_forward,
+                                      size: 18, color: Colors.white),
+                                ],
+                              ],
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.primary,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              elevation: 3,
+                              shadowColor: AppColors.primary.withOpacity(0.4),
+                            ),
+                          ),
+                        );
+                      },
                     ),
 
                   ],

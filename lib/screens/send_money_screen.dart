@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
+import '../providers/wallet_provider.dart';
 import 'success_screen.dart';
 
+class MockContact {
+  final String name;
+  final String initials;
+  final Color avatarColor;
+  final int walletId;
+
+  MockContact({required this.name, required this.initials, required this.avatarColor, required this.walletId});
+}
+
 final mockContacts = [
-  MockContact(name: 'Emma', initials: 'EJ', avatarColor: const Color(0xFFEC4899)),
-  MockContact(name: 'Michael', initials: 'MS', avatarColor: const Color(0xFF3B82F6)),
-  MockContact(name: 'Sarah', initials: 'SL', avatarColor: const Color(0xFF8B5CF6)),
-  MockContact(name: 'David', initials: 'DJ', avatarColor: const Color(0xFF10B981)),
-  MockContact(name: 'Ayşe', initials: 'AK', avatarColor: const Color(0xFFF59E0B)),
-  MockContact(name: 'Mehmet', initials: 'MY', avatarColor: const Color(0xFFEF4444)),
+  MockContact(name: 'Emma', initials: 'EJ', avatarColor: const Color(0xFFEC4899), walletId: 2),
+  MockContact(name: 'Michael', initials: 'MS', avatarColor: const Color(0xFF3B82F6), walletId: 3),
+  MockContact(name: 'Sarah', initials: 'SL', avatarColor: const Color(0xFF8B5CF6), walletId: 4),
+  MockContact(name: 'David', initials: 'DJ', avatarColor: const Color(0xFF10B981), walletId: 5),
+  MockContact(name: 'Ayşe', initials: 'AK', avatarColor: const Color(0xFFF59E0B), walletId: 6),
+  MockContact(name: 'Mehmet', initials: 'MY', avatarColor: const Color(0xFFEF4444), walletId: 7),
 ];
 
 class SendMoneyScreen extends StatefulWidget {
@@ -53,17 +64,53 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
     return _amount;
   }
 
+  Future<void> _handleSendMoney() async {
+    final walletProvider = context.read<WalletProvider>();
+    if (walletProvider.wallets.isEmpty) return;
+
+    final amount = double.tryParse(_amount) ?? 0;
+    final senderWalletId = walletProvider.wallets.first.walletId;
+    final receiverWalletId = mockContacts[_selectedContact].walletId;
+    final description = _noteController.text.isEmpty ? 'Transfer' : _noteController.text;
+
+    final success = await walletProvider.sendMoney(
+      senderWalletId: senderWalletId,
+      receiverWalletId: receiverWalletId,
+      amount: amount,
+      description: description,
+    );
+
+    if (success && mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SuccessScreen(
+            amount: '₺$_amount',
+            recipient: mockContacts[_selectedContact].name,
+            isSend: true,
+          ),
+        ),
+      );
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Transfer başarısız. Bakiye yetersiz olabilir.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final walletProvider = context.watch<WalletProvider>();
+    final currentBalance = walletProvider.wallets.isNotEmpty 
+        ? walletProvider.wallets.first.balance 
+        : 0.0;
 
     return Scaffold(
-      backgroundColor:
-          isDark ? AppColors.surfaceDark : Colors.white,
+      backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
       appBar: AppBar(
-        backgroundColor:
-            isDark ? AppColors.surfaceDark : Colors.white,
+        backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
         title: Text(l.sendMoney,
             style: TextStyle(
                 fontWeight: FontWeight.w600,
@@ -85,13 +132,8 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
       ),
       body: Column(
         children: [
-          // Contacts row
           _buildContactsRow(context, l, isDark),
-
-          // Amount display
-          _buildAmountDisplay(context, l, isDark),
-
-          // Note input
+          _buildAmountDisplay(context, l, isDark, currentBalance),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: TextField(
@@ -110,19 +152,14 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
               ),
             ),
           ),
-
-          // Numpad
           Expanded(child: _buildNumpad(context, isDark)),
-
-          // Send button
           _buildSendButton(context, l, isDark),
         ],
       ),
     );
   }
 
-  Widget _buildContactsRow(
-      BuildContext context, AppLocalizations l, bool isDark) {
+  Widget _buildContactsRow(BuildContext context, AppLocalizations l, bool isDark) {
     return SizedBox(
       height: 120,
       child: Column(
@@ -142,14 +179,12 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               children: [
-                // Contacts
                 ...mockContacts.asMap().entries.map((e) {
                   final isSelected = _selectedContact == e.key;
                   return Padding(
                     padding: const EdgeInsets.only(right: 16),
                     child: GestureDetector(
-                      onTap: () =>
-                          setState(() => _selectedContact = e.key),
+                      onTap: () => setState(() => _selectedContact = e.key),
                       child: Column(
                         children: [
                           Container(
@@ -159,17 +194,7 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
                               color: e.value.avatarColor,
                               shape: BoxShape.circle,
                               border: isSelected
-                                  ? Border.all(
-                                      color: AppColors.primary, width: 2.5)
-                                  : null,
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                          color: AppColors.primary
-                                              .withOpacity(0.4),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2))
-                                    ]
+                                  ? Border.all(color: AppColors.primary, width: 2.5)
                                   : null,
                             ),
                             child: Center(
@@ -184,14 +209,8 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
                           Text(e.value.name,
                               style: TextStyle(
                                   fontSize: 11,
-                                  fontWeight: isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.w500,
-                                  color: isSelected
-                                      ? AppColors.primary
-                                      : (isDark
-                                          ? AppColors.slate300
-                                          : AppColors.slate700))),
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                  color: isSelected ? AppColors.primary : (isDark ? AppColors.slate300 : AppColors.slate700))),
                         ],
                       ),
                     ),
@@ -205,177 +224,67 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
     );
   }
 
-  Widget _buildAmountDisplay(
-      BuildContext context, AppLocalizations l, bool isDark) {
+  Widget _buildAmountDisplay(BuildContext context, AppLocalizations l, bool isDark, double balance) {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
       decoration: BoxDecoration(
         color: isDark ? AppColors.slate800.withOpacity(0.5) : AppColors.slate50,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: isDark ? AppColors.slate700 : AppColors.slate100),
+        border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
       ),
       child: Column(
         children: [
-          Text(l.enterAmount,
-              style: const TextStyle(
-                  color: AppColors.slate400,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500)),
+          Text(l.enterAmount, style: const TextStyle(color: AppColors.slate400, fontSize: 13)),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
             children: [
-              const Text('₺',
-                  style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w300,
-                      color: AppColors.primary)),
+              const Text('₺', style: TextStyle(fontSize: 28, color: AppColors.primary)),
               const SizedBox(width: 4),
-              Text(_displayAmount,
-                  style: const TextStyle(
-                      fontSize: 52,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.primary,
-                      letterSpacing: -2)),
+              Text(_displayAmount, style: const TextStyle(fontSize: 52, fontWeight: FontWeight.bold, color: AppColors.primary)),
             ],
           ),
           const SizedBox(height: 12),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.slate700 : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 4)
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.account_balance_wallet_outlined,
-                    color: AppColors.slate400, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  '${l.balance}: ',
-                  style: const TextStyle(
-                      color: AppColors.slate500,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  '₺14.582,50',
-                  style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color:
-                          isDark ? Colors.white : AppColors.slate800),
-                ),
-              ],
-            ),
-          ),
+          Text('${l.balance}: ₺${balance.toStringAsFixed(2)}', 
+            style: TextStyle(color: isDark ? Colors.white70 : AppColors.slate600, fontSize: 13)),
         ],
       ),
     );
   }
 
   Widget _buildNumpad(BuildContext context, bool isDark) {
-    final keys = [
-      '1', '2', '3',
-      '4', '5', '6',
-      '7', '8', '9',
-      '.', '0', '⌫',
-    ];
-
+    final keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', '⌫'];
     return GridView.count(
       crossAxisCount: 3,
-      padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 4),
-      childAspectRatio: 2.4,
-      mainAxisSpacing: 4,
-      crossAxisSpacing: 4,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      childAspectRatio: 2.2,
       physics: const NeverScrollableScrollPhysics(),
-      children: keys.map((k) {
-        final isBackspace = k == '⌫';
-        return GestureDetector(
-          onTap: () => _onKeyPress(k),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Center(
-              child: isBackspace
-                  ? Icon(Icons.backspace_outlined,
-                      color: isDark
-                          ? AppColors.slate400
-                          : AppColors.slate500,
-                      size: 22)
-                  : Text(k,
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? Colors.white
-                              : AppColors.slate800)),
-            ),
-          ),
-        );
-      }).toList(),
+      children: keys.map((k) => GestureDetector(
+        onTap: () => _onKeyPress(k),
+        child: Center(
+          child: k == '⌫' 
+            ? Icon(Icons.backspace_outlined, color: isDark ? Colors.white70 : Colors.black54)
+            : Text(k, style: TextStyle(fontSize: 24, color: isDark ? Colors.white : Colors.black87)),
+        ),
+      )).toList(),
     );
   }
 
-  Widget _buildSendButton(
-      BuildContext context, AppLocalizations l, bool isDark) {
+  Widget _buildSendButton(BuildContext context, AppLocalizations l, bool isDark) {
     final amt = double.tryParse(_amount) ?? 0;
+    final isLoading = context.watch<WalletProvider>().isLoading;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+      padding: const EdgeInsets.all(24),
       child: SizedBox(
         width: double.infinity,
         height: 54,
         child: ElevatedButton(
-          onPressed: amt > 0
-              ? () {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SuccessScreen(
-                        amount: '₺$_amount',
-                        recipient: mockContacts[_selectedContact].name,
-                        isSend: true,
-                      ),
-                    ),
-                  );
-                }
-              : null,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14)),
-            elevation: 4,
-            shadowColor: AppColors.primary.withOpacity(0.4),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '${l.sendButton} ₺$_amount',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(width: 8),
-              const Icon(Icons.arrow_forward_rounded,
-                  color: Colors.white, size: 18),
-            ],
-          ),
+          onPressed: (amt > 0 && !isLoading) ? _handleSendMoney : null,
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+          child: isLoading 
+            ? const CircularProgressIndicator(color: Colors.white)
+            : Text('${l.sendButton} ₺$_amount', style: const TextStyle(color: Colors.white)),
         ),
       ),
     );

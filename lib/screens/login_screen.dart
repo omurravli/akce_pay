@@ -27,12 +27,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    final l = AppLocalizations.of(context)!;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen tüm alanları doldurun')),
+        SnackBar(content: Text(l.pleaseFillAllFields)),
       );
       return;
     }
@@ -48,7 +49,26 @@ class _LoginScreenState extends State<LoginScreen> {
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Giriş başarısız. Email veya şifre hatalı.')),
+          SnackBar(content: Text(l.loginFailed)),
+        );
+      }
+    }
+  }
+
+  Future<void> _loginWithDemo() async {
+    final l = AppLocalizations.of(context)!;
+    final success = await context.read<AuthProvider>().loginWithDemoAccount();
+
+    if (success) {
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l.demoLoginFailed)),
         );
       }
     }
@@ -277,12 +297,46 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
 
+                    const SizedBox(height: 12),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: context.watch<AuthProvider>().isLoading
+                            ? null
+                            : _loginWithDemo,
+                        icon: const Icon(Icons.flash_on_rounded,
+                            color: AppColors.primary, size: 18),
+                        label: Text(
+                          l.useDemoAccount,
+                          style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(
+                              color: AppColors.primary, width: 1.5),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      l.demoHint,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: AppColors.slate400, fontSize: 11),
+                    ),
+
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          "Hesabınız yok mu? ",
+                          l.noAccountQuestion,
                           style: TextStyle(color: AppColors.slate500, fontSize: 14),
                         ),
                         TextButton(
@@ -292,8 +346,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               MaterialPageRoute(builder: (_) => const RegisterScreen()),
                             );
                           },
-                          child: const Text(
-                            "Hemen Kayıt Ol",
+                          child: Text(
+                            l.signUpNow,
                             style: TextStyle(
                               color: AppColors.primary,
                               fontWeight: FontWeight.bold,

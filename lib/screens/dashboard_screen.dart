@@ -5,10 +5,19 @@ import '../theme.dart';
 import '../main.dart';
 import '../providers/auth_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../providers/market_provider.dart';
+import '../providers/cashback_provider.dart';
+import '../providers/portfolio_provider.dart';
 import '../models/wallet.dart';
+import '../services/demo_data.dart';
 import 'send_money_screen.dart';
 import 'pay_bills_screen.dart';
 import 'activity_screen.dart';
+import 'trading_screen.dart';
+import 'portfolio_screen.dart';
+import 'cashback_screen.dart';
+import 'admin_screen.dart';
+import 'login_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -27,12 +36,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<WalletProvider>().fetchWallets();
+      context.read<MarketProvider>().fetchRates();
+      context.read<PortfolioProvider>().fetchHoldings();
+      context.read<CashbackProvider>().fetch();
     });
   }
 
   void _onNavTap(int index) {
     setState(() => _selectedIndex = index);
+    // 0: Home (current), 1: Portfolio, 2: Activity
     if (index == 1) {
+      Navigator.push(context,
+          MaterialPageRoute(builder: (_) => const PortfolioScreen()));
+      setState(() => _selectedIndex = 0);
+    } else if (index == 2) {
       Navigator.push(
           context, MaterialPageRoute(builder: (_) => const ActivityScreen()));
       setState(() => _selectedIndex = 0);
@@ -46,14 +63,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showLoadBalanceDialog(BuildContext context, List<Wallet> wallets) {
+    final l = AppLocalizations.of(context)!;
     if (wallets.isEmpty) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text("Cüzdan Bulunamadı"),
-          content: const Text("Para yüklemek için aktif bir banka hesabınız/cüzdanınız bulunmuyor. Lütfen önce bir cüzdan oluşturun."),
+          title: Text(l.walletNotFoundTitle),
+          content: Text(l.walletNotFoundDescription),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("Kapat")),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(l.close)),
           ],
         ),
       );
@@ -68,13 +86,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("Para Yükle", style: TextStyle(fontWeight: FontWeight.bold)),
+          title: Text(l.loadMoney, style: const TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<Wallet>(
                 value: _selectedWalletInDialog,
-                decoration: const InputDecoration(labelText: "Hesap Seçin"),
+                decoration: InputDecoration(labelText: l.selectAccount),
                 items: wallets.map((w) => DropdownMenuItem(
                   value: w,
                   child: Text("${w.walletType} - ${w.iban.substring(w.iban.length - 4)}"),
@@ -89,15 +107,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
               TextField(
                 controller: amountController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: const InputDecoration(
-                  labelText: "Tutar (₺)",
-                  prefixIcon: Icon(Icons.add_card),
+                decoration: InputDecoration(
+                  labelText: l.amountTry,
+                  prefixIcon: const Icon(Icons.add_card),
                 ),
               ),
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text("İptal")),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(l.cancel)),
             ElevatedButton(
               onPressed: () async {
                 final amount = double.tryParse(amountController.text);
@@ -105,18 +123,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final success = await context.read<WalletProvider>().loadBalance(
                     walletId: _selectedWalletInDialog.walletId,
                     amount: amount,
-                    description: "Bakiye yüklendi",
+                    description: l.balanceLoaded,
                   );
                   if (mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(success ? "İşlem başarılı" : "İşlem başarısız")),
+                      SnackBar(content: Text(success ? l.operationSuccessful : l.operationFailed)),
                     );
                   }
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              child: const Text("Yükle", style: TextStyle(color: Colors.white)),
+              child: Text(l.upload, style: const TextStyle(color: Colors.white)),
             ),
           ],
         ),
@@ -142,10 +160,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context, l, isDark),
+              _buildDemoBanner(context, l, isDark),
               _buildPagerSection(context, l, isDark),
               _buildQuickActions(context, l, isDark),
+              _buildMarketStrip(context, l, isDark),
+              _buildAdminEntry(context, l, isDark),
               _buildMonthlySpending(context, l, isDark),
               _buildRecentTransactions(context, l, isDark),
+              const SizedBox(height: 12),
             ],
           ),
         ),
@@ -157,7 +179,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       BuildContext context, AppLocalizations l, bool isDark) {
     final appState = AkcePayApp.of(context);
     final currentScale = appState?.textScaleFactor ?? 1.0;
-    final user = context.watch<AuthProvider>().user;
+    final auth = context.watch<AuthProvider>();
+    final user = auth.user;
+    final displayName = auth.isDemo ? l.demoUserName : (user?.username ?? '');
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -174,7 +198,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             child: Center(
-              child: Text(user?.username.substring(0, 1).toUpperCase() ?? 'A',
+              child: Text(displayName.substring(0, 1).toUpperCase(),
                   style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
@@ -184,7 +208,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              '${l.goodMorning} ${user?.username ?? ''}',
+              '${l.goodMorning} $displayName',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -259,11 +283,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
               const Divider(),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
-                  "Yazı Boyutu",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.slate400),
+                  AppLocalizations.of(context)!.textSize,
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.slate400),
                 ),
               ),
               _FontSizeControl(
@@ -275,6 +299,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 },
               ),
               const SizedBox(height: 8),
+              const Divider(),
+              TextButton.icon(
+                onPressed: () async {
+                  Navigator.pop(context);
+                  await context.read<AuthProvider>().logout();
+                  if (mounted) {
+                    Navigator.of(context).pushAndRemoveUntil(
+                      MaterialPageRoute(
+                          builder: (_) => const LoginScreen()),
+                      (_) => false,
+                    );
+                  }
+                },
+                icon: const Icon(Icons.logout_rounded,
+                    size: 18, color: AppColors.red500),
+                label: Text(
+                  AppLocalizations.of(context)!.logout,
+                  style: TextStyle(
+                      color: AppColors.red500,
+                      fontWeight: FontWeight.w600),
+                ),
+              ),
             ],
           ),
         ),
@@ -438,17 +484,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(wallet.walletType == 'TL' ? "Ana Hesap" : "Döviz Hesabı", style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+                    Text(wallet.walletType == 'TL' ? l.primaryAccount : l.foreignCurrencyAccount, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 4),
                     Text(wallet.iban, style: const TextStyle(color: Colors.white, fontSize: 14, fontFamily: 'Monospace')),
                     const Spacer(),
-                    const Text("Bakiye", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    Text(l.balance, style: const TextStyle(color: Colors.white70, fontSize: 12)),
                     Text("₺${wallet.balance.toStringAsFixed(2)}", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(8)),
-                      child: Text("Vadesiz ${wallet.walletType}", style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                      child: Text(l.checkingAccount(wallet.walletType), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -486,7 +532,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text("Akçe Card", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    Text(l.akceCard, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     const Spacer(),
                     const Text("**** **** **** 1289", style: TextStyle(color: Colors.white, fontSize: 18, letterSpacing: 2)),
                     const SizedBox(height: 20),
@@ -516,70 +562,366 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildQuickActions(
       BuildContext context, AppLocalizations l, bool isDark) {
     final walletProvider = context.watch<WalletProvider>();
-    
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final actionWidth = textScale > 1.2 ? 88.0 : 76.0;
+    final actionLabelHeight = textScale > 1.2 ? 34.0 : 28.0;
+
     final actions = [
       (
-      icon: Icons.send_rounded,
-      label: l.send,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const SendMoneyScreen()))
+        icon: Icons.send_rounded,
+        label: l.send,
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const SendMoneyScreen())),
       ),
       (
-      icon: Icons.receipt_long_rounded,
-      label: l.payBills,
-      onTap: () => Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const PayBillsScreen()))
+        icon: Icons.receipt_long_rounded,
+        label: l.payBills,
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const PayBillsScreen())),
       ),
       (
-      icon: Icons.add_to_photos_rounded,
-      label: "Para Yükle",
-      onTap: () => _showLoadBalanceDialog(context, walletProvider.wallets)
+        icon: Icons.swap_vert_rounded,
+        label: l.tradeBuySell,
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const TradingScreen())),
+      ),
+      (
+        icon: Icons.pie_chart_rounded,
+        label: l.portfolio,
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const PortfolioScreen())),
+      ),
+      (
+        icon: Icons.local_atm_rounded,
+        label: l.cashback,
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const CashbackScreen())),
+      ),
+      (
+        icon: Icons.add_to_photos_rounded,
+        label: l.loadMoney,
+        onTap: () => _showLoadBalanceDialog(context, walletProvider.wallets),
       ),
     ];
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: actions.map((a) {
-          return GestureDetector(
-            onTap: a.onTap,
-            behavior: HitTestBehavior.opaque,
-            child: SizedBox(
-              width: 80,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: isDark ? AppColors.slate800 : AppColors.slate100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(a.icon, color: AppColors.primary, size: 22),
+      padding: const EdgeInsets.fromLTRB(8, 20, 8, 4),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          children: actions.map((a) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: GestureDetector(
+                onTap: a.onTap,
+                behavior: HitTestBehavior.opaque,
+                child: SizedBox(
+                  width: actionWidth,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppColors.slate800
+                              : AppColors.slate100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(a.icon,
+                            color: AppColors.primary, size: 22),
+                      ),
+                      const SizedBox(height: 6),
+                      SizedBox(
+                        height: actionLabelHeight,
+                        child: Text(
+                          a.label,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? AppColors.slate400
+                                : AppColors.slate600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    a.label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? AppColors.slate400 : AppColors.slate600,
-                    ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDemoBanner(
+      BuildContext context, AppLocalizations l, bool isDark) {
+    final auth = context.watch<AuthProvider>();
+    if (!auth.isDemo) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: AppColors.primary.withOpacity(isDark ? 0.18 : 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.flash_on_rounded,
+                size: 16, color: AppColors.primary),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                l.demoBanner,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===== Borsa kısa özeti (gold/silver/USD/EUR) =====
+  Widget _buildMarketStrip(
+      BuildContext context, AppLocalizations l, bool isDark) {
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final stripHeight = textScale > 1.2 ? 126.0 : 104.0;
+
+    return Consumer<MarketProvider>(
+      builder: (context, mp, _) {
+        if (mp.rates.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(l.market,
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17,
+                          color: isDark
+                              ? Colors.white
+                              : AppColors.slate900)),
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const TradingScreen())),
+                    child: Text(l.seeAll,
+                        style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600)),
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: stripHeight,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: mp.rates.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  itemBuilder: (ctx, i) {
+                    final r = mp.rates[i];
+                    final isUp = r.isUp;
+                    final color = r.symbol.startsWith('GOLD')
+                        ? const Color(0xFFD4A017)
+                        : r.symbol.startsWith('SILVER')
+                            ? const Color(0xFF94A3B8)
+                            : r.symbol == 'USD'
+                                ? AppColors.green600
+                                : AppColors.blue600;
+                    return GestureDetector(
+                      onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => TradingScreen(
+                                  initialSymbol: r.symbol))),
+                      child: Container(
+                        width: textScale > 1.2 ? 162 : 150,
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? AppColors.cardDark
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: isDark
+                                  ? AppColors.slate700
+                                  : AppColors.slate100),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 24,
+                                  height: 24,
+                                  decoration: BoxDecoration(
+                                    color: color.withOpacity(
+                                        isDark ? 0.2 : 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    r.symbol.startsWith('GOLD')
+                                        ? Icons.workspace_premium_rounded
+                                        : r.symbol.startsWith('SILVER')
+                                            ? Icons.shield_moon_rounded
+                                            : r.symbol == 'USD'
+                                                ? Icons
+                                                    .attach_money_rounded
+                                                : Icons.euro_rounded,
+                                    size: 14,
+                                    color: color,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(l.assetName(r.symbol, r.name),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 12,
+                                          color: isDark
+                                              ? Colors.white
+                                              : AppColors.slate900)),
+                                ),
+                              ],
+                            ),
+                            Text('₺${r.midPrice.toStringAsFixed(2)}',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: isDark
+                                        ? Colors.white
+                                        : AppColors.slate900)),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(
+                                    isUp
+                                        ? Icons.trending_up
+                                        : Icons.trending_down,
+                                    size: 12,
+                                    color: isUp
+                                        ? AppColors.green600
+                                        : AppColors.red500),
+                                const SizedBox(width: 3),
+                                Text(
+                                    '${isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isUp
+                                            ? AppColors.green600
+                                            : AppColors.red500)),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ===== Admin paneli (yalnız role==admin) =====
+  Widget _buildAdminEntry(
+      BuildContext context, AppLocalizations l, bool isDark) {
+    final auth = context.watch<AuthProvider>();
+    if (!auth.isAdmin) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const AdminScreen())),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                AppColors.primary.withOpacity(isDark ? 0.25 : 0.1),
+                AppColors.primaryDark.withOpacity(isDark ? 0.25 : 0.1),
+              ],
             ),
-          );
-        }).toList(),
+            border: Border.all(
+                color: AppColors.primary.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                    color: AppColors.primary, shape: BoxShape.circle),
+                child: const Icon(Icons.admin_panel_settings_rounded,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l.adminPanel,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: isDark
+                                ? Colors.white
+                                : AppColors.slate900)),
+                    Text(l.adminStats,
+                        style: const TextStyle(
+                            color: AppColors.slate500, fontSize: 11)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.primary),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildMonthlySpending(
       BuildContext context, AppLocalizations l, bool isDark) {
+    final isDemo = context.watch<AuthProvider>().isDemo;
+    final spent = isDemo ? 0.0 : 1240.0;
+    final budget = isDemo ? 2000.0 : 2000.0;
+    final progress = isDemo ? 0.0 : 0.62;
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Container(
@@ -603,7 +945,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         color: isDark
                             ? Colors.white
                             : AppColors.slate900)),
-                Text('₺1.240 / ₺2.000',
+                Text('₺${spent.toStringAsFixed(0)} / ₺${budget.toStringAsFixed(0)}',
                     style: TextStyle(
                         fontSize: 13,
                         color: isDark
@@ -616,7 +958,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
               child: LinearProgressIndicator(
-                value: 0.62,
+                value: progress,
                 backgroundColor:
                 isDark ? AppColors.slate700 : AppColors.slate200,
                 valueColor: const AlwaysStoppedAnimation<Color>(
@@ -625,7 +967,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            Text(l.budgetUsed,
+            Text(
+                isDemo
+                    ? l.noSpendingYet
+                    : l.budgetUsed,
                 style: TextStyle(
                     fontSize: 12,
                     color: isDark
@@ -639,6 +984,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildRecentTransactions(
       BuildContext context, AppLocalizations l, bool isDark) {
+    final isDemo = context.watch<AuthProvider>().isDemo;
+    final demoEntries = DemoData.demoActivities.take(4).toList();
     final transactions = [
       (
       icon: Icons.restaurant_rounded,
@@ -662,7 +1009,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       icon: Icons.account_balance_rounded,
       color: AppColors.green600,
       bg: const Color(0xFFDCFCE7),
-      title: 'Maaş',
+      title: l.isTr ? 'Maaş' : 'Salary',
       subtitle: 'Mar 15',
       amount: '+₺22.500,00',
       isCredit: true,
@@ -671,7 +1018,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       icon: Icons.bolt_rounded,
       color: AppColors.purple600,
       bg: AppColors.purple100,
-      title: 'EDAŞ Elektrik',
+      title: l.isTr ? 'EDAŞ Elektrik' : 'EDAS Electricity',
       subtitle: 'Mar 12',
       amount: '-₺456,00',
       isCredit: false,
@@ -705,93 +1052,268 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.cardDark : Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: isDark
-                      ? AppColors.slate700
-                      : AppColors.slate100),
-            ),
-            child: Column(
-              children: transactions.asMap().entries.map((entry) {
-                final i = entry.key;
-                final t = entry.value;
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 42,
-                            height: 42,
-                            decoration: BoxDecoration(
-                              color: isDark
-                                  ? t.color.withOpacity(0.2)
-                                  : t.bg,
-                              shape: BoxShape.circle,
-                            ),
-                            child:
-                            Icon(t.icon, color: t.color, size: 20),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                              children: [
-                                Text(t.title,
-                                    style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 14,
-                                        color: isDark
-                                            ? Colors.white
-                                            : AppColors.slate900)),
-                                Text(t.subtitle,
-                                    style: const TextStyle(
-                                        color: AppColors.slate400,
-                                        fontSize: 12)),
-                              ],
-                            ),
-                          ),
-                          Text(
-                            t.amount,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                              color: t.isCredit
-                                  ? AppColors.green600
-                                  : (isDark
-                                  ? Colors.white
-                                  : AppColors.slate900),
-                            ),
-                          ),
-                        ],
-                      ),
+          if (isDemo && demoEntries.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: isDark
+                        ? AppColors.slate700
+                        : AppColors.slate100),
+              ),
+              child: Column(
+                children: [
+                  const Icon(Icons.history_rounded,
+                      size: 36, color: AppColors.slate400),
+                  const SizedBox(height: 8),
+                  Text(
+                    l.noTransactionHistory,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : AppColors.slate800,
                     ),
-                    if (i < transactions.length - 1)
-                      Divider(
-                          height: 1,
-                          color: isDark
-                              ? AppColors.slate700
-                              : AppColors.slate100),
-                  ],
-                );
-              }).toList(),
+                  ),
+                ],
+              ),
+            )
+          else if (isDemo)
+            Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: isDark
+                        ? AppColors.slate700
+                        : AppColors.slate100),
+              ),
+              child: Column(
+                children: demoEntries.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final t = _demoRecentTransaction(l, entry.value);
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? t.bg.withOpacity(0.35)
+                                    : t.bg,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(t.icon, color: t.color, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(t.title,
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.white
+                                              : AppColors.slate900)),
+                                  Text(t.subtitle,
+                                      style: const TextStyle(
+                                          color: AppColors.slate400,
+                                          fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              t.amount,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: t.isCredit
+                                    ? AppColors.green600
+                                    : (isDark
+                                        ? Colors.white
+                                        : AppColors.slate900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (i < demoEntries.length - 1)
+                        Divider(
+                            height: 1,
+                            color: isDark
+                                ? AppColors.slate700
+                                : AppColors.slate100),
+                    ],
+                  );
+                }).toList(),
+              ),
+            )
+          else
+            Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.cardDark : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: isDark
+                        ? AppColors.slate700
+                        : AppColors.slate100),
+              ),
+              child: Column(
+                children: transactions.asMap().entries.map((entry) {
+                  final i = entry.key;
+                  final t = entry.value;
+                  return Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? t.color.withOpacity(0.2)
+                                    : t.bg,
+                                shape: BoxShape.circle,
+                              ),
+                              child:
+                              Icon(t.icon, color: t.color, size: 20),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+                                  Text(t.title,
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                          color: isDark
+                                              ? Colors.white
+                                              : AppColors.slate900)),
+                                  Text(t.subtitle,
+                                      style: const TextStyle(
+                                          color: AppColors.slate400,
+                                          fontSize: 12)),
+                                ],
+                              ),
+                            ),
+                            Text(
+                              t.amount,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: t.isCredit
+                                    ? AppColors.green600
+                                    : (isDark
+                                    ? Colors.white
+                                    : AppColors.slate900),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (i < transactions.length - 1)
+                        Divider(
+                            height: 1,
+                            color: isDark
+                                ? AppColors.slate700
+                                : AppColors.slate100),
+                    ],
+                  );
+                }).toList(),
+              ),
             ),
-          ),
         ],
       ),
     );
+  }
+
+  ({
+    IconData icon,
+    Color color,
+    Color bg,
+    String title,
+    String subtitle,
+    String amount,
+    bool isCredit
+  }) _demoRecentTransaction(AppLocalizations l, DemoActivityEntry entry) {
+    final subtitle =
+        '${entry.createdAt.hour.toString().padLeft(2, '0')}:${entry.createdAt.minute.toString().padLeft(2, '0')}';
+    final amount =
+        '${entry.isCredit ? '+' : '-'}₺${entry.amount.toStringAsFixed(2)}';
+
+    switch (entry.type) {
+      case 'load_balance':
+        return (
+          icon: Icons.add_card_rounded,
+          color: AppColors.green600,
+          bg: const Color(0xFFDCFCE7),
+          title: l.loadMoney,
+          subtitle: subtitle,
+          amount: amount,
+          isCredit: entry.isCredit,
+        );
+      case 'buy_asset':
+        return (
+          icon: Icons.north_rounded,
+          color: AppColors.orange600,
+          bg: AppColors.orange100,
+          title: '${l.buy} ${l.assetName(entry.assetSymbol ?? '')}',
+          subtitle: subtitle,
+          amount: amount,
+          isCredit: entry.isCredit,
+        );
+      case 'sell_asset':
+        return (
+          icon: Icons.south_rounded,
+          color: AppColors.green600,
+          bg: const Color(0xFFDCFCE7),
+          title: '${l.sell} ${l.assetName(entry.assetSymbol ?? '')}',
+          subtitle: subtitle,
+          amount: amount,
+          isCredit: entry.isCredit,
+        );
+      case 'send_money':
+        return (
+          icon: Icons.send_rounded,
+          color: AppColors.primary,
+          bg: const Color(0xFFDBEAFE),
+          title: entry.note ?? l.sendMoney,
+          subtitle: subtitle,
+          amount: amount,
+          isCredit: entry.isCredit,
+        );
+      default:
+        return (
+          icon: Icons.receipt_long_rounded,
+          color: AppColors.slate500,
+          bg: AppColors.slate100,
+          title: entry.note ?? l.activity,
+          subtitle: subtitle,
+          amount: amount,
+          isCredit: entry.isCredit,
+        );
+    }
   }
 
   Widget _buildBottomNav(BuildContext context, AppLocalizations l,
       bool isDark, double bottomPadding) {
     final items = [
       (icon: Icons.home_rounded, label: l.home),
+      (icon: Icons.pie_chart_rounded, label: l.portfolio),
       (icon: Icons.swap_horiz_rounded, label: l.activity),
     ];
 
@@ -835,6 +1357,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 2),
                   Text(
                     e.value.label,
+                    maxLines: 2,
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 10,
                       fontWeight: isActive

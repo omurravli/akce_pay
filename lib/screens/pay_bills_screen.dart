@@ -473,9 +473,7 @@ class _PayBillsScreenState extends State<PayBillsScreen> {
                         fontSize: 13,
                         color: AppColors.orange600)),
                 Text(
-                    Localizations.localeOf(context).languageCode == 'tr'
-                        ? '3 fatura ödeme bekliyor'
-                        : '3 bills are awaiting payment',
+                    l.pendingBillsCount,
                     style: const TextStyle(
                         fontSize: 11, color: AppColors.slate600)),
               ],

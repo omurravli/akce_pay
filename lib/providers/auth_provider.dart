@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../services/api_service.dart';
+import '../services/demo_data.dart';
 
 class AuthProvider with ChangeNotifier {
   final ApiService _apiService = ApiService();
@@ -12,7 +13,10 @@ class AuthProvider with ChangeNotifier {
   User? get user => _user;
   String? get token => _token;
   bool get isLoading => _isLoading;
-  bool get isAuthenticated => _token != null;
+  bool get isAuthenticated => _token != null && _user != null;
+  bool get isDemo => _token == DemoData.demoToken;
+
+  bool get isAdmin => _user?.isAdmin == true;
 
   AuthProvider() {
     _loadToken();
@@ -20,6 +24,21 @@ class AuthProvider with ChangeNotifier {
 
   Future<void> _loadToken() async {
     _token = await _apiService.getToken();
+    if (_token == DemoData.demoToken) {
+      _user = DemoData.demoUser;
+    } else {
+      final userJson = await _apiService.getUserJson();
+      if (userJson != null) {
+        _user = User.fromJson(jsonDecode(userJson));
+      } else if (_token != null) {
+        _token = null;
+        await _apiService.deleteToken();
+      }
+    }
+    if (_token != null && _user == null) {
+      _token = null;
+      await _apiService.deleteToken();
+    }
     notifyListeners();
   }
 
@@ -27,26 +46,46 @@ class AuthProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
+    final emailLower = email.trim().toLowerCase();
     try {
-      final response = await _apiService.login(email, password);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        _token = data['token'];
-        _user = User.fromJson(data['user']);
-        await _apiService.saveToken(_token!);
-        _isLoading = false;
-        notifyListeners();
-        return true;
-      } else {
-        _isLoading = false;
-        notifyListeners();
-        return false;
-      }
+      return await _loginWithCredentials(emailLower, password);
     } catch (e) {
+      return false;
+    } finally {
       _isLoading = false;
       notifyListeners();
-      return false;
     }
+  }
+
+  Future<bool> loginWithDemoAccount() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      DemoData.reset();
+      _token = DemoData.demoToken;
+      _user = DemoData.demoUser;
+      await _apiService.saveToken(_token!);
+      await _apiService.saveUserJson(jsonEncode(_user!.toJson()));
+      return true;
+    } catch (e) {
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> _loginWithCredentials(String email, String password) async {
+    final response = await _apiService.login(email, password);
+    if (response.statusCode != 200) return false;
+
+    final data = jsonDecode(response.body);
+    _token = data['token'];
+    _user = User.fromJson(data['user']);
+    await _apiService.saveToken(_token!);
+    await _apiService.saveUserJson(jsonEncode(_user!.toJson()));
+    return true;
   }
 
   Future<bool> register({
@@ -86,6 +125,7 @@ class AuthProvider with ChangeNotifier {
   Future<void> logout() async {
     _token = null;
     _user = null;
+    DemoData.reset();
     await _apiService.deleteToken();
     notifyListeners();
   }

@@ -45,14 +45,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (success) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Kayıt başarılı! Giriş yapabilirsiniz.')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.registerSuccess)),
         );
         Navigator.pop(context);
       }
     } else {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Kayıt başarısız. Bilgileri kontrol edin.')),
+          SnackBar(content: Text(AppLocalizations.of(context)!.registerFailed)),
         );
       }
     }
@@ -83,7 +83,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "Akçe Pay dünyasına katılmak için bilgileri doldur.",
+                  l.joinAkcePay,
                   style: TextStyle(color: AppColors.slate500, fontSize: 14),
                 ),
                 const SizedBox(height: 32),
@@ -91,11 +91,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Username
                 TextFormField(
                   controller: _usernameController,
-                  decoration: const InputDecoration(
-                    hintText: "Ad Soyad",
-                    prefixIcon: Icon(Icons.person_outline),
+                  decoration: InputDecoration(
+                    hintText: l.fullName,
+                    prefixIcon: const Icon(Icons.person_outline),
                   ),
-                  validator: (v) => v!.isEmpty ? "Zorunlu alan" : null,
+                  validator: (v) => v!.isEmpty ? l.requiredField : null,
                 ),
                 const SizedBox(height: 16),
 
@@ -107,7 +107,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     hintText: l.emailAddress,
                     prefixIcon: const Icon(Icons.email_outlined),
                   ),
-                  validator: (v) => v!.contains('@') ? null : "Geçerli bir email girin",
+                  validator: (v) => v!.contains('@') ? null : l.validEmail,
                 ),
                 const SizedBox(height: 16),
 
@@ -115,11 +115,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    hintText: "Telefon Numarası",
-                    prefixIcon: Icon(Icons.phone_android_outlined),
+                  decoration: InputDecoration(
+                    hintText: l.phoneNumber,
+                    prefixIcon: const Icon(Icons.phone_android_outlined),
                   ),
-                  validator: (v) => v!.isEmpty ? "Zorunlu alan" : null,
+                  validator: (v) => v!.isEmpty ? l.requiredField : null,
                 ),
                 const SizedBox(height: 16),
 
@@ -130,11 +130,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       child: TextFormField(
                         controller: _ageController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(
-                          hintText: "Yaş",
-                          prefixIcon: Icon(Icons.calendar_today_outlined),
+                        decoration: InputDecoration(
+                          hintText: l.age,
+                          prefixIcon: const Icon(Icons.calendar_today_outlined),
                         ),
-                        validator: (v) => v!.isEmpty ? "!" : null,
+                        validator: (v) => v!.isEmpty ? l.requiredField : null,
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -151,7 +151,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           ),
                         ),
-                        validator: (v) => v!.length < 6 ? "En az 6 karakter" : null,
+                        validator: (v) => v!.length < 6 ? l.minimumSixChars : null,
                       ),
                     ),
                   ],

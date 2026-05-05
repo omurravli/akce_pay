@@ -93,7 +93,7 @@ class _SendMoneyScreenState extends State<SendMoneyScreen> {
       );
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Transfer başarısız. Bakiye yetersiz olabilir.')),
+        SnackBar(content: Text(AppLocalizations.of(context)!.transferFailed)),
       );
     }
   }

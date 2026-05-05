@@ -106,7 +106,7 @@ class _SuccessScreenState extends State<SuccessScreen>
                           _receiptRow(
                             context,
                             isDark,
-                            label: widget.isSend ? 'Alıcı' : 'Fatura',
+                            label: widget.isSend ? l.recipientLabel : l.billLabel,
                             value: widget.recipient,
                           ),
                           const SizedBox(height: 12),
@@ -134,14 +134,14 @@ class _SuccessScreenState extends State<SuccessScreen>
                           _receiptRow(
                             context,
                             isDark,
-                            label: 'Tarih',
+                            label: l.date,
                             value: '17.03.2026 20:42',
                           ),
                           const SizedBox(height: 12),
                           _receiptRow(
                             context,
                             isDark,
-                            label: 'Ref No',
+                            label: l.referenceNo,
                             value: 'AKC-20260317-8421',
                             valueStyle: const TextStyle(
                                 color: AppColors.slate500,

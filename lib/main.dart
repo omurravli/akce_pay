@@ -8,15 +8,41 @@ import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'providers/auth_provider.dart';
 import 'providers/wallet_provider.dart';
+import 'providers/market_provider.dart';
+import 'providers/portfolio_provider.dart';
+import 'providers/cashback_provider.dart';
+import 'providers/admin_provider.dart';
 
 void main() {
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+
+        // Auth değişimine reaktif provider'lar:
         ChangeNotifierProxyProvider<AuthProvider, WalletProvider>(
           create: (_) => WalletProvider(),
-          update: (_, auth, wallet) => wallet!..updateAuth(auth),
+          update: (_, auth, w) => w!..updateAuth(auth),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, MarketProvider>(
+          create: (_) => MarketProvider(),
+          update: (_, auth, m) => m!..updateAuth(auth),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, AdminProvider>(
+          create: (_) => AdminProvider(),
+          update: (_, auth, a) => a!..updateAuth(auth),
+        ),
+
+        // Birden fazla bağımlılığı olan provider'lar (Auth + Wallet + Market):
+        ChangeNotifierProxyProvider3<AuthProvider, WalletProvider,
+            MarketProvider, PortfolioProvider>(
+          create: (_) => PortfolioProvider(),
+          update: (_, auth, w, m, p) => p!..updateDeps(auth, w, m),
+        ),
+        ChangeNotifierProxyProvider2<AuthProvider, WalletProvider,
+            CashbackProvider>(
+          create: (_) => CashbackProvider(),
+          update: (_, auth, w, c) => c!..updateDeps(auth, w),
         ),
       ],
       child: const AkcePayApp(),
@@ -27,9 +53,9 @@ void main() {
 class AppScrollBehavior extends MaterialScrollBehavior {
   @override
   Set<PointerDeviceKind> get dragDevices => {
-    PointerDeviceKind.touch,
-    PointerDeviceKind.mouse,
-  };
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+      };
 }
 
 class AkcePayApp extends StatefulWidget {
@@ -84,7 +110,9 @@ class _AkcePayAppState extends State<AkcePayApp> {
             Locale('en'),
             Locale('tr'),
           ],
-          home: auth.isAuthenticated ? const DashboardScreen() : const LoginScreen(),
+          home: auth.isAuthenticated
+              ? const DashboardScreen()
+              : const LoginScreen(),
         );
       },
     );

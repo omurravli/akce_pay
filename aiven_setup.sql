@@ -1,25 +1,15 @@
-#!/bin/bash
+-- 1. Reset (Optional: Use only if you want to wipe the cloud DB)
+DROP TABLE IF EXISTS activities CASCADE;
+DROP TABLE IF EXISTS transactions CASCADE;
+DROP TABLE IF EXISTS cards CASCADE;
+DROP TABLE IF EXISTS wallets CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+DROP TYPE IF EXISTS activity_type CASCADE;
 
-# Define the database name and user
-DB_NAME="my_app_db"
-DB_USER="user"
-
-echo "🚀 Starting database schema initialization..."
-
-# Execute all SQL in one block
-docker exec -i $(docker ps -qf "name=db") psql -U $DB_USER -d $DB_NAME <<EOF
--- 1. Drop existing items if they exist (for a clean start)
-DROP TABLE IF EXISTS activities;
-DROP TABLE IF EXISTS transactions;
-DROP TABLE IF EXISTS cards;
-DROP TABLE IF EXISTS wallets;
-DROP TABLE IF EXISTS users;
-DROP TYPE IF EXISTS activity_type;  
-
--- 2. Create Custom Enum for Activities
+-- 2. Create Types
 CREATE TYPE activity_type AS ENUM ('LOGIN', 'UNSUCCESSFUL_LOGIN', 'REGISTER', 'UPDATE', 'DELETE', 'TRANSFER', 'DEPOSIT', 'WALLET_CREATE');
 
--- 3. Create Users Table
+-- 3. Create Tables
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -31,7 +21,6 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 4. Create Wallets Table
 CREATE TABLE wallets (
     wallet_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -41,7 +30,6 @@ CREATE TABLE wallets (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. Create Cards Table
 CREATE TABLE cards (
     card_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     card_no VARCHAR(20) UNIQUE NOT NULL,
@@ -52,7 +40,6 @@ CREATE TABLE cards (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 6. Create Transactions Table
 CREATE TABLE transactions (
     transaction_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sender_id UUID REFERENCES users(id),
@@ -66,7 +53,6 @@ CREATE TABLE transactions (
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. Create Activities Table (Audit Trail)
 CREATE TABLE activities (
     activity_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -75,9 +61,3 @@ CREATE TABLE activities (
     ip VARCHAR(45),
     date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-
-EOF
-
-echo "✅ Schema built successfully!"
-echo "📊 Current Tables:"
-docker exec -it $(docker ps -qf "name=db") psql -U $DB_USER -d $DB_NAME -c "\dt"

@@ -14,6 +14,7 @@ app.use(express.json());
 // Database Connection (Matching your Docker Compose)
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
 });
 
 
@@ -93,7 +94,7 @@ app.post('/auth/login', async (req, res) => {
 
         if (!isMatch) {
             await pool.query(
-                "INSERT INTO activities (owner_id, type, description, ip) VALUES ($1, 'UNSUCCESFULL_LOGIN', $2, $3)",
+                "INSERT INTO activities (owner_id, type, description, ip) VALUES ($1, 'UNSUCCESSFUL_LOGIN', $2, $3)",
                 [user.id, 'Invalid e-mail or password', req.ip]
             );
             return res.status(401).json({ error: "Invalid email or password" });

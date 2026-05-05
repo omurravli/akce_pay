@@ -13,7 +13,7 @@ app.use(express.json());
 
 // Database Connection (Matching your Docker Compose)
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: process.env.DATABASE_URL?.replace('?sslmode=require', '').replace('&sslmode=require', ''),
     ssl: { rejectUnauthorized: false }
 });
 

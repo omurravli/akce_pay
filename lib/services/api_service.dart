@@ -263,6 +263,41 @@ class ApiService {
     return await http.get(url, headers: _getHeaders(token));
   }
 
+  // ==========================================================================
+  // Stocks
+  // ==========================================================================
+  Future<http.Response> getPopularStocks() async {
+    final token = await getToken();
+    return await http.get(Uri.parse('$baseUrl/api/stocks/popular'), headers: _getHeaders(token));
+  }
+
+  Future<http.Response> getTrackedStocks() async {
+    final token = await getToken();
+    return await http.get(Uri.parse('$baseUrl/api/stocks/tracked'), headers: _getHeaders(token));
+  }
+
+  Future<http.Response> trackStock({required String symbol, required String name}) async {
+    final token = await getToken();
+    return await http.post(
+      Uri.parse('$baseUrl/api/stocks/track'),
+      headers: _getHeaders(token),
+      body: jsonEncode({'symbol': symbol, 'name': name}),
+    );
+  }
+
+  Future<http.Response> untrackStock(String symbol) async {
+    final token = await getToken();
+    return await http.delete(Uri.parse('$baseUrl/api/stocks/track/$symbol'), headers: _getHeaders(token));
+  }
+
+  Future<http.Response> searchBistStocks(String query) async {
+    final token = await getToken();
+    return await http.get(
+      Uri.parse('$baseUrl/api/stocks/search?q=${Uri.encodeComponent(query)}'),
+      headers: _getHeaders(token),
+    );
+  }
+
   Future<http.Response> searchUsers(String query) async {
     final token = await getToken();
     final url = Uri.parse('$baseUrl/api/users/search?q=${Uri.encodeComponent(query)}');

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
@@ -6,8 +7,8 @@ import '../models/asset.dart';
 import '../providers/market_provider.dart';
 import '../providers/portfolio_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../providers/stocks_provider.dart';
 
-/// Borsa: Altın/Gümüş/Döviz al-sat ekranı.
 class TradingScreen extends StatefulWidget {
   const TradingScreen({super.key, this.initialSymbol});
 
@@ -20,20 +21,41 @@ class TradingScreen extends StatefulWidget {
 class _TradingScreenState extends State<TradingScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
+  final _searchController = TextEditingController();
+  Timer? _debounce;
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 2, vsync: this);
+    _tabs = TabController(length: 3, vsync: this);
+    _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MarketProvider>().fetchRates();
+      context.read<StocksProvider>().fetchAll();
     });
   }
 
   @override
   void dispose() {
     _tabs.dispose();
+    _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    final q = _searchController.text.trim();
+    if (q.isEmpty) {
+      context.read<StocksProvider>().clearSearch();
+      setState(() {});
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      context.read<StocksProvider>().searchStocks(q);
+      setState(() {});
+    });
+    setState(() {});
   }
 
   bool _isStock(String symbol) =>
@@ -98,23 +120,234 @@ class _TradingScreenState extends State<TradingScreen>
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.slate400,
           indicatorColor: AppColors.primary,
-          tabs: [
-            Tab(text: l.market),
-            Tab(text: l.holdings),
+          tabs: const [
+            Tab(text: 'Hisseler'),
+            Tab(text: 'Emtia & Döviz'),
+            Tab(text: 'Portföy'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabs,
         children: [
-          _buildMarketTab(l, isDark),
+          _buildStocksTab(isDark),
+          _buildCommoditiesTab(l, isDark),
           _buildHoldingsTab(l, isDark),
         ],
       ),
     );
   }
 
-  Widget _buildMarketTab(AppLocalizations l, bool isDark) {
+  // ── Stocks tab ──────────────────────────────────────────────────────────
+  Widget _buildStocksTab(bool isDark) {
+    return Consumer<StocksProvider>(
+      builder: (context, sp, _) {
+        return Column(
+          children: [
+            _buildStockSearchBar(isDark, sp),
+            Expanded(
+              child: _searchController.text.isNotEmpty
+                  ? _buildSearchResults(isDark, sp)
+                  : _buildStocksList(isDark, sp),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildStockSearchBar(bool isDark, StocksProvider sp) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: TextField(
+        controller: _searchController,
+        decoration: InputDecoration(
+          hintText: 'Hisse ara... (ör: THYAO, PETKM)',
+          hintStyle: const TextStyle(fontSize: 13),
+          prefixIcon: sp.isSearching
+              ? const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)))
+              : const Icon(Icons.search_rounded, size: 20),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear_rounded, size: 18),
+                  onPressed: () { _searchController.clear(); sp.clearSearch(); })
+              : null,
+          filled: true,
+          fillColor: isDark ? AppColors.slate800 : AppColors.slate50,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          isDense: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStocksList(bool isDark, StocksProvider sp) {
+    if (sp.isLoading && sp.popular.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return RefreshIndicator(
+      onRefresh: () => sp.fetchAll(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+        children: [
+          if (sp.tracked.isNotEmpty) ...[
+            _sectionHeader('Takip Listesi', isDark),
+            ...sp.tracked.map((s) => _buildStockTile(isDark, s, sp)),
+            const SizedBox(height: 8),
+          ],
+          _sectionHeader('Popüler Hisseler (BIST)', isDark),
+          ...sp.popular.map((s) => _buildStockTile(isDark, s, sp)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchResults(bool isDark, StocksProvider sp) {
+    if (sp.isSearching) return const Center(child: CircularProgressIndicator());
+    if (sp.searchResults.isEmpty) {
+      return const Center(
+        child: Text('Sonuç bulunamadı', style: TextStyle(color: AppColors.slate400)),
+      );
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+      itemCount: sp.searchResults.length,
+      itemBuilder: (context, i) {
+        final r = sp.searchResults[i];
+        final tracked = sp.isTracked(r.symbol);
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.cardDark : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: _colorFor(r.symbol).withValues(alpha: isDark ? 0.2 : 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    r.symbol.substring(0, r.symbol.length.clamp(0, 2)),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: _colorFor(r.symbol)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(r.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14,
+                        color: isDark ? Colors.white : AppColors.slate900)),
+                    Text(r.symbol, style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
+                  ],
+                ),
+              ),
+              GestureDetector(
+                onTap: () => tracked ? sp.untrackStock(r.symbol) : sp.trackStock(r.symbol, r.name),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (tracked ? AppColors.red500 : AppColors.primary).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    tracked ? 'Kaldır' : 'Takip Et',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                        color: tracked ? AppColors.red500 : AppColors.primary),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildStockTile(bool isDark, MarketRate r, StocksProvider sp) {
+    final tracked = sp.isTracked(r.symbol);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: _colorFor(r.symbol).withValues(alpha: isDark ? 0.2 : 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(_iconFor(r.symbol), color: _colorFor(r.symbol), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(r.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14,
+                    color: isDark ? Colors.white : AppColors.slate900)),
+                Text(r.symbol, style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('₺${r.sellPrice.toStringAsFixed(2)}',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
+                      color: isDark ? Colors.white : AppColors.slate900)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: (r.isUp ? AppColors.green500 : AppColors.red500).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold,
+                      color: r.isUp ? AppColors.green600 : AppColors.red500),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: () => tracked ? sp.untrackStock(r.symbol) : sp.trackStock(r.symbol, r.name),
+            child: Icon(
+              tracked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+              color: tracked ? AppColors.primary : AppColors.slate400,
+              size: 22,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String title, bool isDark) => Padding(
+    padding: const EdgeInsets.only(bottom: 8, top: 4),
+    child: Text(title,
+        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+            color: isDark ? AppColors.slate300 : AppColors.slate600)),
+  );
+
+  // ── Commodities & currencies tab ─────────────────────────────────────────
+  Widget _buildCommoditiesTab(AppLocalizations l, bool isDark) {
     return Consumer<MarketProvider>(
       builder: (context, mp, _) {
         if (mp.isLoading && mp.rates.isEmpty) {
@@ -126,10 +359,7 @@ class _TradingScreenState extends State<TradingScreen>
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             itemCount: mp.rates.length,
             separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, i) {
-              final r = mp.rates[i];
-              return _buildRateCard(l, isDark, r);
-            },
+            itemBuilder: (context, i) => _buildRateCard(l, isDark, mp.rates[i]),
           ),
         );
       },

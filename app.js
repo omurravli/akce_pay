@@ -18,8 +18,18 @@ const pool = new Pool({
 });
 
 
-// Add role column if missing (safe to run every startup)
+// Schema migrations (safe to run every startup)
 pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'`).catch(console.error);
+pool.query(`
+    CREATE TABLE IF NOT EXISTS tracked_stocks (
+        id          SERIAL PRIMARY KEY,
+        user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        symbol      VARCHAR(20) NOT NULL,
+        name        VARCHAR(100),
+        added_at    TIMESTAMP   DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, symbol)
+    )
+`).catch(console.error);
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -280,47 +290,35 @@ app.post('/api/transactions/send', authenticateToken, async (req, res) => {
 
 
 
-// --- MARKET RATES (Twelve Data, cached 60s) ---
-const STOCK_NAMES = {
-    THYAO: 'Türk Hava Yolları',
-    GARAN: 'Garanti BBVA',
-    AKBNK: 'Akbank',
-    EREGL: 'Ereğli Demir Çelik',
-    SISE:  'Şişecam',
-    ASELS: 'Aselsan',
-    KCHOL: 'Koç Holding',
-};
-
+// ==========================================================================
+// MARKET RATES — commodities + currencies only (Twelve Data, cached 5 min)
+// ==========================================================================
 let _mktCache = null;
 let _mktCacheAt = 0;
+const MKT_TTL = 5 * 60_000;
 
 async function buildMarketRates() {
     const now = Date.now();
-    if (_mktCache && now - _mktCacheAt < 60_000) return _mktCache;
+    if (_mktCache && now - _mktCacheAt < MKT_TTL) return _mktCache;
 
     const key = process.env.TWELVE_DATA_KEY;
-    const stockSym = Object.keys(STOCK_NAMES).join(',');
-
-    const [stockData, fxData] = await Promise.all([
-        fetch(`https://api.twelvedata.com/quote?symbol=${stockSym}&exchange=BIST&apikey=${key}`).then(r => r.json()),
-        fetch(`https://api.twelvedata.com/quote?symbol=USD/TRY,EUR/TRY,XAU/USD,XAG/USD&apikey=${key}`).then(r => r.json()),
-    ]);
+    const fxData = await fetch(
+        `https://api.twelvedata.com/quote?symbol=USD/TRY,EUR/TRY,XAU/USD,XAG/USD&apikey=${key}`
+    ).then(r => r.json());
 
     const result = [];
     const usdTry = parseFloat(fxData['USD/TRY']?.close ?? 0);
 
-    // Currencies
     for (const [apiSym, displaySym, name] of [
-        ['USD/TRY', 'USD', 'Dolar'],
-        ['EUR/TRY', 'EUR', 'Euro'],
+        ['USD/TRY', 'USD',  'Dolar'],
+        ['EUR/TRY', 'EUR',  'Euro'],
     ]) {
         const d = fxData[apiSym];
         if (!d?.close) continue;
         const price = parseFloat(d.close);
         const prev  = parseFloat(d.previous_close ?? d.close);
         result.push({
-            symbol: displaySym,
-            name,
+            symbol: displaySym, name,
             buy_price:      +(price * 1.003).toFixed(4),
             sell_price:     +(price * 0.997).toFixed(4),
             change_percent: prev > 0 ? +((price - prev) / prev * 100).toFixed(3) : 0,
@@ -328,14 +326,12 @@ async function buildMarketRates() {
         });
     }
 
-    // Gold (gram, TRY) — XAU/USD * USD/TRY / 31.1035 g per troy oz
     const xauUsd = parseFloat(fxData['XAU/USD']?.close ?? 0);
     if (xauUsd > 0 && usdTry > 0) {
         const gramTry = (xauUsd * usdTry) / 31.1035;
         const prev    = parseFloat(fxData['XAU/USD']?.previous_close ?? xauUsd);
         result.push({
-            symbol: 'GOLD_GR',
-            name: 'Gram Altın',
+            symbol: 'GOLD_GR', name: 'Gram Altın',
             buy_price:      +(gramTry * 1.01).toFixed(2),
             sell_price:     +(gramTry * 0.99).toFixed(2),
             change_percent: prev > 0 ? +((xauUsd - prev) / prev * 100).toFixed(3) : 0,
@@ -343,33 +339,15 @@ async function buildMarketRates() {
         });
     }
 
-    // Silver (gram, TRY)
     const xagUsd = parseFloat(fxData['XAG/USD']?.close ?? 0);
     if (xagUsd > 0 && usdTry > 0) {
         const gramTry = (xagUsd * usdTry) / 31.1035;
         const prev    = parseFloat(fxData['XAG/USD']?.previous_close ?? xagUsd);
         result.push({
-            symbol: 'SILVER_GR',
-            name: 'Gram Gümüş',
+            symbol: 'SILVER_GR', name: 'Gram Gümüş',
             buy_price:      +(gramTry * 1.01).toFixed(2),
             sell_price:     +(gramTry * 0.99).toFixed(2),
             change_percent: prev > 0 ? +((xagUsd - prev) / prev * 100).toFixed(3) : 0,
-            updated_at: new Date().toISOString(),
-        });
-    }
-
-    // BIST Stocks
-    for (const [sym, name] of Object.entries(STOCK_NAMES)) {
-        const d = stockData[sym];
-        if (!d?.close) continue;
-        const price = parseFloat(d.close);
-        const prev  = parseFloat(d.previous_close ?? d.close);
-        result.push({
-            symbol: sym,
-            name,
-            buy_price:      +(price * 1.001).toFixed(2),
-            sell_price:     +(price * 0.999).toFixed(2),
-            change_percent: prev > 0 ? +((price - prev) / prev * 100).toFixed(3) : 0,
             updated_at: new Date().toISOString(),
         });
     }
@@ -380,13 +358,131 @@ async function buildMarketRates() {
 }
 
 app.get('/api/market/rates', authenticateToken, async (req, res) => {
-    try {
-        const data = await buildMarketRates();
-        res.json(data);
-    } catch (err) {
-        console.error('Market rates error:', err);
-        res.status(500).json({ error: 'Could not fetch market rates' });
+    try { res.json(await buildMarketRates()); }
+    catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch market rates' }); }
+});
+
+// ==========================================================================
+// STOCKS — popular list + per-user tracked (Twelve Data, cached 5 min)
+// ==========================================================================
+const POPULAR_SYMBOLS = {
+    THYAO: 'Türk Hava Yolları',   GARAN: 'Garanti BBVA',
+    AKBNK: 'Akbank',               EREGL: 'Ereğli Demir Çelik',
+    SISE:  'Şişecam',              ASELS: 'Aselsan',
+    KCHOL: 'Koç Holding',          TUPRS: 'Tüpraş',
+    BIMAS: 'BİM Mağazalar',        SAHOL: 'Sabancı Holding',
+    PETKM: 'Petkim',               ARCLK: 'Arçelik',
+    TOASO: 'Tofaş Oto',            FROTO: 'Ford Otosan',
+    PGSUS: 'Pegasus',              EKGYO: 'Emlak Konut',
+    YKBNK: 'Yapı Kredi',           VAKBN: 'Vakıfbank',
+    HALKB: 'Halkbank',             ISCTR: 'İş Bankası',
+    KOZAL: 'Koza Altın',           KRDMD: 'Kardemir',
+    TAVHL: 'TAV Havalimanları',    TCELL: 'Turkcell',
+    TTKOM: 'Türk Telekom',         SOKM:  'Şok Marketler',
+    MAVI:  'Mavi Giyim',           LOGO:  'Logo Yazılım',
+    ODAS:  'Odaş Elektrik',        MGROS: 'Migros',
+};
+
+let _stockCache = {};
+let _stockCacheAt = 0;
+const STOCK_TTL = 5 * 60_000;
+
+async function refreshStockCache() {
+    const now = Date.now();
+    if (now - _stockCacheAt < STOCK_TTL) return;
+
+    const tracked = await pool.query('SELECT DISTINCT symbol FROM tracked_stocks');
+    const allSyms = [...new Set([
+        ...Object.keys(POPULAR_SYMBOLS),
+        ...tracked.rows.map(r => r.symbol),
+    ])];
+
+    const key = process.env.TWELVE_DATA_KEY;
+    const raw = await fetch(
+        `https://api.twelvedata.com/quote?symbol=${allSyms.join(',')}&exchange=BIST&apikey=${key}`
+    ).then(r => r.json());
+
+    // Twelve Data returns the object directly (not wrapped) when only 1 symbol
+    const data = allSyms.length === 1 ? { [allSyms[0]]: raw } : raw;
+
+    const newCache = {};
+    for (const sym of allSyms) {
+        const d = data[sym];
+        if (!d?.close) continue;
+        const price = parseFloat(d.close);
+        const prev  = parseFloat(d.previous_close ?? d.close);
+        newCache[sym] = {
+            symbol: sym,
+            name: POPULAR_SYMBOLS[sym] || d.name || sym,
+            buy_price:      +(price * 1.001).toFixed(2),
+            sell_price:     +(price * 0.999).toFixed(2),
+            change_percent: prev > 0 ? +((price - prev) / prev * 100).toFixed(3) : 0,
+            updated_at: new Date().toISOString(),
+        };
     }
+    _stockCache = newCache;
+    _stockCacheAt = now;
+}
+
+// GET /api/stocks/popular
+app.get('/api/stocks/popular', authenticateToken, async (req, res) => {
+    try {
+        await refreshStockCache();
+        res.json(Object.keys(POPULAR_SYMBOLS).map(s => _stockCache[s]).filter(Boolean));
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch popular stocks' }); }
+});
+
+// GET /api/stocks/tracked
+app.get('/api/stocks/tracked', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    try {
+        await refreshStockCache();
+        const { rows } = await pool.query(
+            'SELECT symbol, name FROM tracked_stocks WHERE user_id = $1 ORDER BY added_at',
+            [userId]
+        );
+        res.json(rows.map(r => _stockCache[r.symbol] ?? { symbol: r.symbol, name: r.name }).filter(s => s.buy_price));
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch tracked stocks' }); }
+});
+
+// POST /api/stocks/track  body: { symbol, name }
+app.post('/api/stocks/track', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    const { symbol, name } = req.body;
+    if (!symbol) return res.status(400).json({ error: 'symbol required' });
+    try {
+        await pool.query(
+            'INSERT INTO tracked_stocks (user_id, symbol, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+            [userId, symbol.toUpperCase(), name || symbol]
+        );
+        _stockCacheAt = 0; // force refresh so new symbol is priced
+        res.json({ success: true });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Could not track stock' }); }
+});
+
+// DELETE /api/stocks/track/:symbol
+app.delete('/api/stocks/track/:symbol', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    try {
+        await pool.query(
+            'DELETE FROM tracked_stocks WHERE user_id = $1 AND symbol = $2',
+            [userId, req.params.symbol.toUpperCase()]
+        );
+        res.json({ success: true });
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Could not untrack stock' }); }
+});
+
+// GET /api/stocks/search?q=   (Twelve Data symbol_search, BIST only)
+app.get('/api/stocks/search', authenticateToken, async (req, res) => {
+    const { q } = req.query;
+    if (!q || q.length < 2) return res.json([]);
+    try {
+        const key = process.env.TWELVE_DATA_KEY;
+        const data = await fetch(
+            `https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(q)}&exchange=BIST&apikey=${key}`
+        ).then(r => r.json());
+        res.json((data.data || []).slice(0, 15).map(s => ({ symbol: s.symbol, name: s.instrument_name })));
+    } catch (err) { console.error(err); res.status(500).json({ error: 'Search failed' }); }
 });
 
 // --- GET TRANSACTIONS ---

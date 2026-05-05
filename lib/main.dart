@@ -13,6 +13,7 @@ import 'providers/portfolio_provider.dart';
 import 'providers/cashback_provider.dart';
 import 'providers/admin_provider.dart';
 import 'providers/transaction_provider.dart';
+import 'providers/stocks_provider.dart';
 
 void main() {
   runApp(
@@ -36,6 +37,10 @@ void main() {
         ChangeNotifierProxyProvider<AuthProvider, AdminProvider>(
           create: (_) => AdminProvider(),
           update: (_, auth, a) => a!..updateAuth(auth),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, StocksProvider>(
+          create: (_) => StocksProvider(),
+          update: (_, auth, s) => s!..updateAuth(auth),
         ),
 
         // Birden fazla bağımlılığı olan provider'lar (Auth + Wallet + Market):

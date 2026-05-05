@@ -36,12 +36,29 @@ class _TradingScreenState extends State<TradingScreen>
     super.dispose();
   }
 
+  bool _isStock(String symbol) =>
+      !symbol.contains('/') &&
+      !symbol.startsWith('GOLD') &&
+      !symbol.startsWith('SILVER') &&
+      symbol != 'USD' &&
+      symbol != 'EUR';
+
   IconData _iconFor(String symbol) {
     if (symbol.startsWith('GOLD')) return Icons.workspace_premium_rounded;
     if (symbol.startsWith('SILVER')) return Icons.shield_moon_rounded;
     if (symbol == 'USD') return Icons.attach_money_rounded;
     if (symbol == 'EUR') return Icons.euro_rounded;
-    return Icons.show_chart_rounded;
+    // BIST stocks
+    switch (symbol) {
+      case 'THYAO': return Icons.flight_rounded;
+      case 'GARAN': return Icons.account_balance_rounded;
+      case 'AKBNK': return Icons.account_balance_rounded;
+      case 'EREGL': return Icons.factory_rounded;
+      case 'SISE':  return Icons.science_rounded;
+      case 'ASELS': return Icons.radar_rounded;
+      case 'KCHOL': return Icons.corporate_fare_rounded;
+      default:      return Icons.show_chart_rounded;
+    }
   }
 
   Color _colorFor(String symbol) {
@@ -49,7 +66,17 @@ class _TradingScreenState extends State<TradingScreen>
     if (symbol.startsWith('SILVER')) return const Color(0xFF94A3B8);
     if (symbol == 'USD') return const Color(0xFF22C55E);
     if (symbol == 'EUR') return const Color(0xFF3B82F6);
-    return AppColors.primary;
+    // BIST stocks — distinct colours
+    switch (symbol) {
+      case 'THYAO': return const Color(0xFF1D4ED8);
+      case 'GARAN': return const Color(0xFF059669);
+      case 'AKBNK': return const Color(0xFFDC2626);
+      case 'EREGL': return const Color(0xFF7C3AED);
+      case 'SISE':  return const Color(0xFF0891B2);
+      case 'ASELS': return const Color(0xFF65A30D);
+      case 'KCHOL': return const Color(0xFFCA8A04);
+      default:      return AppColors.primary;
+    }
   }
 
   @override
@@ -194,39 +221,54 @@ class _TradingScreenState extends State<TradingScreen>
             ],
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => _openSellSheet(r),
-                  icon: const Icon(Icons.south_rounded, size: 16),
-                  label: Text(l.sell),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.red500,
-                    side: const BorderSide(color: AppColors.red500),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+          if (_isStock(r.symbol))
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.slate800 : AppColors.slate100,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'Hisse Al-Sat Yakında',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: AppColors.slate400),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openSellSheet(r),
+                    icon: const Icon(Icons.south_rounded, size: 16),
+                    label: Text(l.sell),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.red500,
+                      side: const BorderSide(color: AppColors.red500),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _openBuySheet(r),
-                  icon: const Icon(Icons.north_rounded, size: 16),
-                  label: Text(l.buy),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.green600,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _openBuySheet(r),
+                    icon: const Icon(Icons.north_rounded, size: 16),
+                    label: Text(l.buy),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.green600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );

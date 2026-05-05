@@ -280,6 +280,115 @@ app.post('/api/transactions/send', authenticateToken, async (req, res) => {
 
 
 
+// --- MARKET RATES (Twelve Data, cached 60s) ---
+const STOCK_NAMES = {
+    THYAO: 'Türk Hava Yolları',
+    GARAN: 'Garanti BBVA',
+    AKBNK: 'Akbank',
+    EREGL: 'Ereğli Demir Çelik',
+    SISE:  'Şişecam',
+    ASELS: 'Aselsan',
+    KCHOL: 'Koç Holding',
+};
+
+let _mktCache = null;
+let _mktCacheAt = 0;
+
+async function buildMarketRates() {
+    const now = Date.now();
+    if (_mktCache && now - _mktCacheAt < 60_000) return _mktCache;
+
+    const key = process.env.TWELVE_DATA_KEY;
+    const stockSym = Object.keys(STOCK_NAMES).join(',');
+
+    const [stockData, fxData] = await Promise.all([
+        fetch(`https://api.twelvedata.com/quote?symbol=${stockSym}&exchange=BIST&apikey=${key}`).then(r => r.json()),
+        fetch(`https://api.twelvedata.com/quote?symbol=USD/TRY,EUR/TRY,XAU/USD,XAG/USD&apikey=${key}`).then(r => r.json()),
+    ]);
+
+    const result = [];
+    const usdTry = parseFloat(fxData['USD/TRY']?.close ?? 0);
+
+    // Currencies
+    for (const [apiSym, displaySym, name] of [
+        ['USD/TRY', 'USD', 'Dolar'],
+        ['EUR/TRY', 'EUR', 'Euro'],
+    ]) {
+        const d = fxData[apiSym];
+        if (!d?.close) continue;
+        const price = parseFloat(d.close);
+        const prev  = parseFloat(d.previous_close ?? d.close);
+        result.push({
+            symbol: displaySym,
+            name,
+            buy_price:      +(price * 1.003).toFixed(4),
+            sell_price:     +(price * 0.997).toFixed(4),
+            change_percent: prev > 0 ? +((price - prev) / prev * 100).toFixed(3) : 0,
+            updated_at: new Date().toISOString(),
+        });
+    }
+
+    // Gold (gram, TRY) — XAU/USD * USD/TRY / 31.1035 g per troy oz
+    const xauUsd = parseFloat(fxData['XAU/USD']?.close ?? 0);
+    if (xauUsd > 0 && usdTry > 0) {
+        const gramTry = (xauUsd * usdTry) / 31.1035;
+        const prev    = parseFloat(fxData['XAU/USD']?.previous_close ?? xauUsd);
+        result.push({
+            symbol: 'GOLD_GR',
+            name: 'Gram Altın',
+            buy_price:      +(gramTry * 1.01).toFixed(2),
+            sell_price:     +(gramTry * 0.99).toFixed(2),
+            change_percent: prev > 0 ? +((xauUsd - prev) / prev * 100).toFixed(3) : 0,
+            updated_at: new Date().toISOString(),
+        });
+    }
+
+    // Silver (gram, TRY)
+    const xagUsd = parseFloat(fxData['XAG/USD']?.close ?? 0);
+    if (xagUsd > 0 && usdTry > 0) {
+        const gramTry = (xagUsd * usdTry) / 31.1035;
+        const prev    = parseFloat(fxData['XAG/USD']?.previous_close ?? xagUsd);
+        result.push({
+            symbol: 'SILVER_GR',
+            name: 'Gram Gümüş',
+            buy_price:      +(gramTry * 1.01).toFixed(2),
+            sell_price:     +(gramTry * 0.99).toFixed(2),
+            change_percent: prev > 0 ? +((xagUsd - prev) / prev * 100).toFixed(3) : 0,
+            updated_at: new Date().toISOString(),
+        });
+    }
+
+    // BIST Stocks
+    for (const [sym, name] of Object.entries(STOCK_NAMES)) {
+        const d = stockData[sym];
+        if (!d?.close) continue;
+        const price = parseFloat(d.close);
+        const prev  = parseFloat(d.previous_close ?? d.close);
+        result.push({
+            symbol: sym,
+            name,
+            buy_price:      +(price * 1.001).toFixed(2),
+            sell_price:     +(price * 0.999).toFixed(2),
+            change_percent: prev > 0 ? +((price - prev) / prev * 100).toFixed(3) : 0,
+            updated_at: new Date().toISOString(),
+        });
+    }
+
+    _mktCache = result;
+    _mktCacheAt = now;
+    return result;
+}
+
+app.get('/api/market/rates', authenticateToken, async (req, res) => {
+    try {
+        const data = await buildMarketRates();
+        res.json(data);
+    } catch (err) {
+        console.error('Market rates error:', err);
+        res.status(500).json({ error: 'Could not fetch market rates' });
+    }
+});
+
 // --- GET TRANSACTIONS ---
 app.get('/api/transactions', authenticateToken, async (req, res) => {
     const userId = req.user.userId;

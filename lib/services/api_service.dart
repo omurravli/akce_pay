@@ -31,7 +31,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class ApiService {
   // Backend takımının sunucusunun gerçek IP'si.
   // Üretimde environment değişkenine taşınmalı.
-  static const String baseUrl = 'http://10.159.166.3:3000';
+  static const String baseUrl = 'https://akcepay-production.up.railway.app';
 
   final _storage = const FlutterSecureStorage();
 

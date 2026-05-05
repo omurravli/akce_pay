@@ -123,38 +123,28 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 16),
 
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: TextFormField(
-                        controller: _ageController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          hintText: l.age,
-                          prefixIcon: const Icon(Icons.calendar_today_outlined),
-                        ),
-                        validator: (v) => v!.isEmpty ? l.requiredField : null,
-                      ),
+                TextFormField(
+                  controller: _ageController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    hintText: l.age,
+                    prefixIcon: const Icon(Icons.person_outline),
+                  ),
+                  validator: (v) => v!.isEmpty ? l.requiredField : null,
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    hintText: l.password,
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 5,
-                      child: TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          hintText: l.password,
-                          prefixIcon: const Icon(Icons.lock_outline),
-                          suffixIcon: IconButton(
-                            icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                          ),
-                        ),
-                        validator: (v) => v!.length < 6 ? l.minimumSixChars : null,
-                      ),
-                    ),
-                  ],
+                  ),
+                  validator: (v) => v!.length < 6 ? l.minimumSixChars : null,
                 ),
                 const SizedBox(height: 32),
 

@@ -116,7 +116,6 @@ class _ActivityScreenState extends State<ActivityScreen> {
                             _buildDemoSections(context, l, isDark, demoEntries),
                       ))
                 : _buildAuditBody(context, l, isDark),
-                  ),
           ),
         ],
       ),

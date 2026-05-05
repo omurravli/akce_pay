@@ -966,10 +966,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildMonthlySpending(
       BuildContext context, AppLocalizations l, bool isDark) {
-    final isDemo = context.watch<AuthProvider>().isDemo;
-    final spent = isDemo ? 0.0 : 1240.0;
-    final budget = isDemo ? 2000.0 : 2000.0;
-    final progress = isDemo ? 0.0 : 0.62;
+    final auth = context.watch<AuthProvider>();
+    final txProvider = context.watch<TransactionProvider>();
+    final now = DateTime.now();
+    final monthNames = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran',
+                        'Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+    double spent = 0.0;
+    if (auth.isDemo) {
+      spent = 0.0;
+    } else {
+      final userId = auth.user?.id ?? '';
+      for (final tx in txProvider.transactions) {
+        if (tx.senderId == userId &&
+            tx.date.month == now.month &&
+            tx.date.year == now.year) {
+          spent += tx.amount;
+        }
+      }
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -981,50 +996,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
           border: Border.all(
               color: isDark ? AppColors.slate700 : AppColors.slate100),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(l.monthlySpending,
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
-                        color: isDark
-                            ? Colors.white
-                            : AppColors.slate900)),
-                Text('₺${spent.toStringAsFixed(0)} / ₺${budget.toStringAsFixed(0)}',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: isDark
-                            ? AppColors.slate400
-                            : AppColors.slate500,
-                        fontWeight: FontWeight.w500)),
+                        color: isDark ? Colors.white : AppColors.slate900)),
+                const SizedBox(height: 4),
+                Text(monthNames[now.month - 1],
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.slate400)),
               ],
             ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor:
-                isDark ? AppColors.slate700 : AppColors.slate200,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                    AppColors.primary),
-                minHeight: 8,
+            Text(
+              '₺${spent.toStringAsFixed(2)}',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: spent > 0 ? AppColors.red500 : (isDark ? Colors.white : AppColors.slate900),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-                isDemo
-                    ? l.noSpendingYet
-                    : l.budgetUsed,
-                style: TextStyle(
-                    fontSize: 12,
-                    color: isDark
-                        ? AppColors.slate400
-                        : AppColors.slate500)),
           ],
         ),
       ),

@@ -12,6 +12,13 @@
 .swiftpm/
 migrate_working_dir/
 .env
+*.env
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # IntelliJ related
 *.iml
@@ -28,11 +35,20 @@ migrate_working_dir/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
+.flutter-plugins
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
 /build/
 /coverage/
+
+# Android local config (contains SDK path, not portable)
+android/local.properties
+android/.gradle/
+android/key.properties
+
+# iOS
+ios/.symlinks/
 
 # Symbolication related
 app.*.symbols

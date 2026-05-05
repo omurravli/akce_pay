@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/app_transaction.dart';
@@ -10,6 +11,7 @@ class TransactionProvider with ChangeNotifier {
   AuthProvider? _auth;
   List<AppTransaction> _transactions = [];
   bool _isLoading = false;
+  Timer? _pollTimer;
 
   List<AppTransaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
@@ -19,16 +21,39 @@ class TransactionProvider with ChangeNotifier {
     _auth = auth;
     if (auth.isAuthenticated) {
       fetchTransactions();
+      _startPolling();
     } else {
       _transactions = [];
+      _stopPolling();
       notifyListeners();
     }
   }
 
-  Future<void> fetchTransactions() async {
+  void _startPolling() {
+    _pollTimer?.cancel();
+    if (_demo) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      fetchTransactions(silent: true);
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    super.dispose();
+  }
+
+  Future<void> fetchTransactions({bool silent = false}) async {
     if (_auth == null || !_auth!.isAuthenticated) return;
-    _isLoading = true;
-    notifyListeners();
+    if (!silent) {
+      _isLoading = true;
+      notifyListeners();
+    }
 
     if (_demo) {
       _transactions = DemoData.demoActivities

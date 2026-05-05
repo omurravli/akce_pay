@@ -263,6 +263,18 @@ class ApiService {
     return await http.get(url, headers: _getHeaders(token));
   }
 
+  Future<http.Response> searchUsers(String query) async {
+    final token = await getToken();
+    final url = Uri.parse('$baseUrl/api/users/search?q=${Uri.encodeComponent(query)}');
+    return await http.get(url, headers: _getHeaders(token));
+  }
+
+  Future<http.Response> getAdminUserTransactions(String userId) async {
+    final token = await getToken();
+    final url = Uri.parse('$baseUrl/api/admin/users/$userId/transactions');
+    return await http.get(url, headers: _getHeaders(token));
+  }
+
   Future<http.Response> getAdminUsers() async {
     final token = await getToken();
     final url = Uri.parse('$baseUrl/api/admin/users');

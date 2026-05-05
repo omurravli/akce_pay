@@ -14,6 +14,7 @@ import '../services/demo_data.dart';
 import 'send_money_screen.dart';
 import 'pay_bills_screen.dart';
 import 'activity_screen.dart';
+import 'transactions_screen.dart';
 import 'trading_screen.dart';
 import 'portfolio_screen.dart';
 import 'cashback_screen.dart';
@@ -61,6 +62,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _pageController.dispose();
     super.dispose();
+  }
+
+  void _showAdminPinDialog(BuildContext context) {
+    final pinController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Admin Girişi', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: pinController,
+          obscureText: true,
+          autofocus: true,
+          decoration: const InputDecoration(
+            hintText: 'PIN',
+            prefixIcon: Icon(Icons.lock_outline),
+          ),
+          onSubmitted: (_) => _tryAdminUnlock(ctx, pinController.text),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('İptal')),
+          ElevatedButton(
+            onPressed: () => _tryAdminUnlock(ctx, pinController.text),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+            child: const Text('Giriş', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _tryAdminUnlock(BuildContext ctx, String pin) {
+    final success = context.read<AuthProvider>().tryUnlockAdmin(pin);
+    Navigator.pop(ctx);
+    if (success) {
+      Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen()));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Yanlış PIN')),
+      );
+    }
   }
 
   void _showLoadBalanceDialog(BuildContext context, List<Wallet> wallets) {
@@ -121,17 +163,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onPressed: () async {
                 final amount = double.tryParse(amountController.text);
                 if (amount != null && amount > 0) {
-                  final success = await context.read<WalletProvider>().loadBalance(
-                    walletId: _selectedWalletInDialog.walletId,
+                  final messenger = ScaffoldMessenger.of(context);
+                  final walletProvider = context.read<WalletProvider>();
+                  final txProvider = context.read<TransactionProvider>();
+                  final walletId = _selectedWalletInDialog.walletId;
+                  Navigator.pop(context);
+                  final success = await walletProvider.loadBalance(
+                    walletId: walletId,
                     amount: amount,
                     description: l.balanceLoaded,
                   );
-                  if (mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(success ? l.operationSuccessful : l.operationFailed)),
-                    );
-                  }
+                  if (success) txProvider.fetchTransactions();
+                  messenger.showSnackBar(
+                    SnackBar(content: Text(success ? l.operationSuccessful : l.operationFailed)),
+                  );
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
@@ -188,22 +233,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
         children: [
-          // Avatar
-          Container(
-            width: 42,
-            height: 42,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [AppColors.primary, AppColors.primaryDark],
+          // Avatar – long-press to enter admin PIN
+          GestureDetector(
+            onLongPress: () => _showAdminPinDialog(context),
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryDark],
+                ),
               ),
-            ),
-            child: Center(
-              child: Text(displayName.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18)),
+              child: Center(
+                child: Text(displayName.isEmpty ? '?' : displayName.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18)),
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -1005,7 +1053,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (_) => const ActivityScreen())),
+                        builder: (_) => const TransactionsScreen())),
                 child: Text(l.seeAll,
                     style: const TextStyle(
                         color: AppColors.primary,

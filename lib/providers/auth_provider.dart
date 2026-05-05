@@ -16,7 +16,22 @@ class AuthProvider with ChangeNotifier {
   bool get isAuthenticated => _token != null && _user != null;
   bool get isDemo => _token == DemoData.demoToken;
 
-  bool get isAdmin => _user?.isAdmin == true;
+  bool _adminUnlocked = false;
+  bool get isAdmin => _adminUnlocked;
+
+  bool tryUnlockAdmin(String pin) {
+    if (pin == 'akce2025') {
+      _adminUnlocked = true;
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  void lockAdmin() {
+    _adminUnlocked = false;
+    notifyListeners();
+  }
 
   AuthProvider() {
     _loadToken();
@@ -125,6 +140,7 @@ class AuthProvider with ChangeNotifier {
   Future<void> logout() async {
     _token = null;
     _user = null;
+    _adminUnlocked = false;
     DemoData.reset();
     await _apiService.deleteToken();
     notifyListeners();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../models/wallet.dart';
@@ -10,6 +11,7 @@ class WalletProvider with ChangeNotifier {
   AuthProvider? _authProvider;
   List<Wallet> _wallets = [];
   bool _isLoading = false;
+  Timer? _pollTimer;
 
   List<Wallet> get wallets => _wallets;
   bool get isLoading => _isLoading;
@@ -19,10 +21,43 @@ class WalletProvider with ChangeNotifier {
     _authProvider = auth;
     if (auth.isAuthenticated) {
       fetchWallets();
+      _startPolling();
     } else {
       _wallets = [];
+      _stopPolling();
       notifyListeners();
     }
+  }
+
+  void _startPolling() {
+    _pollTimer?.cancel();
+    if (_demo) return;
+    _pollTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      _silentFetch();
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  Future<void> _silentFetch() async {
+    if (_authProvider == null || !_authProvider!.isAuthenticated || _demo) return;
+    try {
+      final response = await _apiService.getWallets();
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        _wallets = data.map((json) => Wallet.fromJson(json)).toList();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  @override
+  void dispose() {
+    _stopPolling();
+    super.dispose();
   }
 
   Future<void> fetchWallets() async {

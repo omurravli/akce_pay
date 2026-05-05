@@ -18,16 +18,17 @@ const pool = new Pool({
 });
 
 
+// Add role column if missing (safe to run every startup)
+pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'`).catch(console.error);
+
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Extract token from "Bearer <token>"
-
-    if (!token) return res.sendStatus(401); // No token? Unauthorized.
-
+    const token = authHeader && authHeader.split(' ')[1];
+    if (!token) return res.sendStatus(401);
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) return res.sendStatus(403); // Bad token? Forbidden.
-        req.user = user; // Add the user data (including userId) to the request object
-        next(); // Move to the actual wallet logic
+        if (err) return res.sendStatus(403);
+        req.user = user;
+        next();
     });
 };
 
@@ -115,7 +116,7 @@ app.post('/auth/login', async (req, res) => {
 
         res.json({
             token,
-            user: { id: user.id, username: user.username, email: user.email }
+            user: { id: user.id, username: user.username, email: user.email, role: user.role || 'user' }
         });
 
     } catch (err) {
@@ -312,6 +313,117 @@ app.get('/api/activities', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Could not fetch activities" });
+    }
+});
+
+// --- SEARCH USERS (for send money contacts) ---
+app.get('/api/users/search', authenticateToken, async (req, res) => {
+    const { q } = req.query;
+    const currentUserId = req.user.userId;
+    try {
+        const result = await pool.query(
+            `SELECT u.id, u.username, u.email, w.wallet_id, w.iban
+             FROM users u
+             LEFT JOIN wallets w ON w.owner_id = u.id AND w.wallet_type = 'TL'
+             WHERE u.id != $1
+               AND (u.username ILIKE $2 OR u.email ILIKE $2 OR w.iban ILIKE $2)
+             ORDER BY u.username
+             LIMIT 20`,
+            [currentUserId, `%${q || ''}%`]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// --- ADMIN: STATS ---
+app.get('/api/admin/stats', authenticateToken, async (req, res) => {
+    try {
+        const [users, txns, vol] = await Promise.all([
+            pool.query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active FROM users`),
+            pool.query(`SELECT COUNT(*) AS total, COALESCE(SUM(amount), 0) AS volume FROM transactions`),
+        ]);
+        res.json({
+            total_users: parseInt(users.rows[0].total),
+            active_users: parseInt(users.rows[0].active),
+            total_transactions: parseInt(txns.rows[0].total),
+            total_volume: parseFloat(txns.rows[0].volume),
+            total_cashback_paid: 0,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Could not fetch stats' });
+    }
+});
+
+// --- ADMIN: USER LIST ---
+app.get('/api/admin/users', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT u.id, u.username, u.email, u.role, u.status,
+                   COALESCE(SUM(w.balance), 0) AS total_balance
+            FROM users u
+            LEFT JOIN wallets w ON w.owner_id = u.id
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+        `);
+        const rows = result.rows.map(r => ({
+            id: r.id,
+            username: r.username,
+            email: r.email,
+            role: r.role || 'user',
+            total_balance: parseFloat(r.total_balance),
+            is_active: r.status !== 'suspended',
+        }));
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Could not fetch users' });
+    }
+});
+
+// --- ADMIN: USER TRANSACTIONS ---
+app.get('/api/admin/users/:id/transactions', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(
+            `SELECT * FROM transactions
+             WHERE sender_id = $1 OR receiver_id = $1
+             ORDER BY date DESC LIMIT 100`,
+            [id]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Could not fetch user transactions' });
+    }
+});
+
+// --- ADMIN: UPDATE USER ---
+app.patch('/api/admin/users/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { is_active, role } = req.body;
+    try {
+        const updates = [];
+        const values = [];
+        let idx = 1;
+        if (is_active !== undefined) {
+            updates.push(`status = $${idx++}`);
+            values.push(is_active ? 'active' : 'suspended');
+        }
+        if (role !== undefined) {
+            updates.push(`role = $${idx++}`);
+            values.push(role);
+        }
+        if (updates.length === 0) return res.status(400).json({ error: 'Nothing to update' });
+        values.push(id);
+        await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Update failed' });
     }
 });
 

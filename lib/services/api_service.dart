@@ -118,7 +118,7 @@ class ApiService {
   }
 
   Future<http.Response> loadBalance({
-    required int walletId,
+    required String walletId,
     required double amount,
     String? description,
   }) async {
@@ -139,8 +139,8 @@ class ApiService {
   // Transactions
   // ==========================================================================
   Future<http.Response> sendMoney({
-    required int senderWalletId,
-    required int receiverWalletId,
+    required String senderWalletId,
+    required String receiverWalletId,
     required double amount,
     required String description,
   }) async {
@@ -232,7 +232,7 @@ class ApiService {
   }
 
   /// Birikmiş cashback bakiyesini bir cüzdana aktarır.
-  Future<http.Response> withdrawCashback({required int walletId}) async {
+  Future<http.Response> withdrawCashback({required String walletId}) async {
     final token = await getToken();
     final url = Uri.parse('$baseUrl/api/cashback/withdraw');
     return await http.post(

@@ -53,7 +53,7 @@ class WalletProvider with ChangeNotifier {
   }
 
   Future<bool> loadBalance({
-    required int walletId,
+    required String walletId,
     required double amount,
     String? description,
   }) async {
@@ -107,8 +107,8 @@ class WalletProvider with ChangeNotifier {
   }
 
   Future<bool> sendMoney({
-    required int senderWalletId,
-    required int receiverWalletId,
+    required String senderWalletId,
+    required String receiverWalletId,
     required double amount,
     required String description,
   }) async {

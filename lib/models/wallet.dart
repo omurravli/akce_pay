@@ -1,5 +1,5 @@
 class Wallet {
-  final int walletId;
+  final String walletId;
   final String ownerId;
   final String iban;
   final String walletType; // TL, USD, EUR, GOLD, SILVER
@@ -15,7 +15,7 @@ class Wallet {
 
   factory Wallet.fromJson(Map<String, dynamic> json) {
     return Wallet(
-      walletId: json['wallet_id'],
+      walletId: json['wallet_id']?.toString() ?? '',
       ownerId: json['owner_id']?.toString() ?? '',
       iban: json['iban'] ?? '',
       walletType: json['wallet_type'] ?? 'TL',

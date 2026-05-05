@@ -39,7 +39,7 @@ class DemoData {
 
   static List<Wallet> _initialWallets() => [
         Wallet(
-          walletId: 1,
+          walletId: 'demo-wallet-tl',
           ownerId: 'local-demo-user',
           iban: 'TR00 0000 0000 0000 0000 0000 01',
           walletType: 'TL',

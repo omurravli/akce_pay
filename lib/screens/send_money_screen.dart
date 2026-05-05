@@ -9,18 +9,18 @@ class MockContact {
   final String name;
   final String initials;
   final Color avatarColor;
-  final int walletId;
+  final String walletId;
 
   MockContact({required this.name, required this.initials, required this.avatarColor, required this.walletId});
 }
 
 final mockContacts = [
-  MockContact(name: 'Emma', initials: 'EJ', avatarColor: const Color(0xFFEC4899), walletId: 2),
-  MockContact(name: 'Michael', initials: 'MS', avatarColor: const Color(0xFF3B82F6), walletId: 3),
-  MockContact(name: 'Sarah', initials: 'SL', avatarColor: const Color(0xFF8B5CF6), walletId: 4),
-  MockContact(name: 'David', initials: 'DJ', avatarColor: const Color(0xFF10B981), walletId: 5),
-  MockContact(name: 'Ayşe', initials: 'AK', avatarColor: const Color(0xFFF59E0B), walletId: 6),
-  MockContact(name: 'Mehmet', initials: 'MY', avatarColor: const Color(0xFFEF4444), walletId: 7),
+  MockContact(name: 'Emma', initials: 'EJ', avatarColor: const Color(0xFFEC4899), walletId: 'mock-wallet-emma'),
+  MockContact(name: 'Michael', initials: 'MS', avatarColor: const Color(0xFF3B82F6), walletId: 'mock-wallet-michael'),
+  MockContact(name: 'Sarah', initials: 'SL', avatarColor: const Color(0xFF8B5CF6), walletId: 'mock-wallet-sarah'),
+  MockContact(name: 'David', initials: 'DJ', avatarColor: const Color(0xFF10B981), walletId: 'mock-wallet-david'),
+  MockContact(name: 'Ayşe', initials: 'AK', avatarColor: const Color(0xFFF59E0B), walletId: 'mock-wallet-ayse'),
+  MockContact(name: 'Mehmet', initials: 'MY', avatarColor: const Color(0xFFEF4444), walletId: 'mock-wallet-mehmet'),
 ];
 
 class SendMoneyScreen extends StatefulWidget {

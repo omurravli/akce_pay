@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
+import '../models/user_activity.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_service.dart';
 import '../services/demo_data.dart';
 import '../theme.dart';
 
@@ -13,6 +16,32 @@ class ActivityScreen extends StatefulWidget {
 }
 
 class _ActivityScreenState extends State<ActivityScreen> {
+  List<UserActivity> _activities = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final isDemo = context.read<AuthProvider>().isDemo;
+    if (!isDemo) _fetchActivities();
+  }
+
+  Future<void> _fetchActivities() async {
+    setState(() => _isLoading = true);
+    try {
+      final res = await ApiService().getActivities();
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(res.body) as List;
+        setState(() {
+          _activities = data.map((j) => UserActivity.fromJson(j)).toList();
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
@@ -86,28 +115,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
                         children:
                             _buildDemoSections(context, l, isDark, demoEntries),
                       ))
-                : ListView(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    children: [
-                      _buildDateSection(
-                        context,
-                        l.today,
-                        isDark,
-                        _todayTransactions(l),
-                      ),
-                      _buildDateSection(
-                        context,
-                        l.yesterday,
-                        isDark,
-                        _yesterdayTransactions(l),
-                      ),
-                      _buildDateSection(
-                        context,
-                        'Mar 15',
-                        isDark,
-                        _olderTransactions(l),
-                      ),
-                    ],
+                : _buildAuditBody(context, l, isDark),
                   ),
           ),
         ],
@@ -382,69 +390,171 @@ class _ActivityScreenState extends State<ActivityScreen> {
     );
   }
 
-  static List<Map<String, dynamic>> _todayTransactions(AppLocalizations l) => [
-        {
-          'icon': Icons.restaurant_rounded,
-          'color': AppColors.orange600,
-          'bg': AppColors.orange100,
-          'title': 'Starbucks',
-          'sub': '09:41',
-          'amount': '-₺89,00',
-          'credit': false,
-        },
-        {
-          'icon': Icons.send_rounded,
-          'color': AppColors.primary,
-          'bg': const Color(0xFFDBEAFE),
-          'title': l.isTr ? 'Emma\'ya Gönderildi' : 'Sent to Emma',
-          'sub': '08:15',
-          'amount': '-₺250,00',
-          'credit': false,
-        },
-      ];
+  Widget _buildAuditBody(BuildContext context, AppLocalizations l, bool isDark) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_activities.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.history_toggle_off_rounded, size: 44, color: AppColors.slate400),
+            const SizedBox(height: 10),
+            Text(
+              l.noDemoTransactionHistory,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : AppColors.slate800,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
-  static List<Map<String, dynamic>> _yesterdayTransactions(
-    AppLocalizations l,
-  ) =>
-      [
-        {
-          'icon': Icons.shopping_bag_rounded,
-          'color': AppColors.blue600,
-          'bg': AppColors.blue100,
-          'title': 'Trendyol',
-          'sub': '14:22',
-          'amount': '-₺349,99',
-          'credit': false,
-        },
-        {
-          'icon': Icons.bolt_rounded,
-          'color': const Color(0xFF9333EA),
-          'bg': const Color(0xFFF3E8FF),
-          'title': l.isTr ? 'EDAŞ Elektrik' : 'EDAS Electricity',
-          'sub': '11:00',
-          'amount': '-₺456,00',
-          'credit': false,
-        },
-      ];
+    // Group by date label
+    final now = DateTime.now();
+    final yesterday = now.subtract(const Duration(days: 1));
+    final Map<String, List<UserActivity>> grouped = {};
+    for (final a in _activities) {
+      final String label;
+      if (a.date.year == now.year && a.date.month == now.month && a.date.day == now.day) {
+        label = l.today;
+      } else if (a.date.year == yesterday.year && a.date.month == yesterday.month && a.date.day == yesterday.day) {
+        label = l.yesterday;
+      } else {
+        label = '${a.date.day}.${a.date.month}.${a.date.year}';
+      }
+      grouped.putIfAbsent(label, () => []).add(a);
+    }
 
-  static List<Map<String, dynamic>> _olderTransactions(AppLocalizations l) => [
-        {
-          'icon': Icons.account_balance_rounded,
-          'color': AppColors.green600,
-          'bg': const Color(0xFFDCFCE7),
-          'title': l.isTr ? 'Maaş' : 'Salary',
-          'sub': '08:00',
-          'amount': '+₺22.500,00',
-          'credit': true,
-        },
-        {
-          'icon': Icons.wifi_rounded,
-          'color': AppColors.primary,
-          'bg': const Color(0xFFDBEAFE),
-          'title': l.isTr ? 'Türk Telekom İnternet' : 'Turk Telekom Internet',
-          'sub': '10:30',
-          'amount': '-₺299,00',
-          'credit': false,
-        },
-      ];
+    return ListView(
+      padding: const EdgeInsets.only(bottom: 20),
+      children: grouped.entries.map((e) => _buildAuditSection(context, e.key, isDark, e.value)).toList(),
+    );
+  }
+
+  Widget _buildAuditSection(BuildContext context, String dateLabel, bool isDark, List<UserActivity> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+          child: Text(dateLabel, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.slate500, letterSpacing: 1.1)),
+        ),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.cardDark : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+          ),
+          child: Column(
+            children: items.asMap().entries.map((e) {
+              final i = e.key;
+              final a = e.value;
+              final icon = _auditIcon(a.type);
+              final color = _auditColor(a.type);
+              final isSuccess = a.type != 'UNSUCCESSFUL_LOGIN' && a.type != 'DELETE';
+              final time = '${a.date.hour.toString().padLeft(2, '0')}:${a.date.minute.toString().padLeft(2, '0')}';
+
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: isDark ? color.withValues(alpha: 0.2) : color.withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(icon, color: color, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _auditTitle(a.type),
+                                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: isDark ? Colors.white : AppColors.slate900),
+                              ),
+                              Text(
+                                a.description?.isNotEmpty == true ? '${a.description}  •  $time' : time,
+                                style: const TextStyle(color: AppColors.slate400, fontSize: 11),
+                              ),
+                              if (a.ip?.isNotEmpty == true)
+                                Text(a.ip!, style: const TextStyle(color: AppColors.slate400, fontSize: 10)),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: isSuccess ? AppColors.green600.withValues(alpha: 0.1) : AppColors.orange600.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            isSuccess ? 'Başarılı' : 'Başarısız',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: isSuccess ? AppColors.green600 : AppColors.orange600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (i < items.length - 1)
+                    Divider(height: 1, indent: 70, color: isDark ? AppColors.slate700 : AppColors.slate100),
+                ],
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _auditIcon(String type) {
+    switch (type) {
+      case 'LOGIN': return Icons.login_rounded;
+      case 'UNSUCCESSFUL_LOGIN': return Icons.warning_amber_rounded;
+      case 'REGISTER': return Icons.person_add_rounded;
+      case 'UPDATE': return Icons.edit_rounded;
+      case 'DELETE': return Icons.delete_rounded;
+      case 'TRANSFER': return Icons.send_rounded;
+      case 'DEPOSIT': return Icons.add_card_rounded;
+      case 'WALLET_CREATE': return Icons.account_balance_wallet_rounded;
+      default: return Icons.info_outline_rounded;
+    }
+  }
+
+  Color _auditColor(String type) {
+    switch (type) {
+      case 'LOGIN':
+      case 'REGISTER':
+      case 'DEPOSIT':
+      case 'WALLET_CREATE': return AppColors.green600;
+      case 'UNSUCCESSFUL_LOGIN':
+      case 'DELETE': return AppColors.orange600;
+      case 'TRANSFER': return AppColors.primary;
+      default: return AppColors.slate500;
+    }
+  }
+
+  String _auditTitle(String type) {
+    switch (type) {
+      case 'LOGIN': return 'Giriş Yapıldı';
+      case 'UNSUCCESSFUL_LOGIN': return 'Başarısız Giriş Denemesi';
+      case 'REGISTER': return 'Hesap Oluşturuldu';
+      case 'UPDATE': return 'Bilgiler Güncellendi';
+      case 'DELETE': return 'Hesap Silindi';
+      case 'TRANSFER': return 'Para Transferi';
+      case 'DEPOSIT': return 'Para Yükleme';
+      case 'WALLET_CREATE': return 'Cüzdan Oluşturuldu';
+      default: return type;
+    }
+  }
 }

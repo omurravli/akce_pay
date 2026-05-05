@@ -5,6 +5,7 @@ import '../theme.dart';
 import '../main.dart';
 import '../providers/auth_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../providers/transaction_provider.dart';
 import '../providers/market_provider.dart';
 import '../providers/cashback_provider.dart';
 import '../providers/portfolio_provider.dart';
@@ -986,44 +987,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       BuildContext context, AppLocalizations l, bool isDark) {
     final isDemo = context.watch<AuthProvider>().isDemo;
     final demoEntries = DemoData.demoActivities.take(4).toList();
-    final transactions = [
-      (
-      icon: Icons.restaurant_rounded,
-      color: AppColors.orange600,
-      bg: AppColors.orange100,
-      title: 'Starbucks',
-      subtitle: l.today,
-      amount: '-₺89,00',
-      isCredit: false,
-      ),
-      (
-      icon: Icons.shopping_bag_rounded,
-      color: AppColors.blue600,
-      bg: AppColors.blue100,
-      title: 'Trendyol',
-      subtitle: l.yesterday,
-      amount: '-₺349,99',
-      isCredit: false,
-      ),
-      (
-      icon: Icons.account_balance_rounded,
-      color: AppColors.green600,
-      bg: const Color(0xFFDCFCE7),
-      title: l.isTr ? 'Maaş' : 'Salary',
-      subtitle: 'Mar 15',
-      amount: '+₺22.500,00',
-      isCredit: true,
-      ),
-      (
-      icon: Icons.bolt_rounded,
-      color: AppColors.purple600,
-      bg: AppColors.purple100,
-      title: l.isTr ? 'EDAŞ Elektrik' : 'EDAS Electricity',
-      subtitle: 'Mar 12',
-      amount: '-₺456,00',
-      isCredit: false,
-      ),
-    ];
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
@@ -1158,83 +1121,122 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             )
           else
-            Container(
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.cardDark : Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: isDark
-                        ? AppColors.slate700
-                        : AppColors.slate100),
-              ),
-              child: Column(
-                children: transactions.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final t = entry.value;
-                  return Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? t.color.withOpacity(0.2)
-                                    : t.bg,
-                                shape: BoxShape.circle,
-                              ),
-                              child:
-                              Icon(t.icon, color: t.color, size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                                children: [
-                                  Text(t.title,
-                                      style: TextStyle(
+            Consumer<TransactionProvider>(
+              builder: (context, txProvider, _) {
+                final currentUserId = context.read<AuthProvider>().user?.id ?? '';
+                final txList = txProvider.transactions.take(4).toList();
+
+                if (txProvider.isLoading) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                }
+
+                if (txList.isEmpty) {
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppColors.cardDark : Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+                    ),
+                    child: Column(
+                      children: [
+                        const Icon(Icons.history_rounded, size: 36, color: AppColors.slate400),
+                        const SizedBox(height: 8),
+                        Text(
+                          l.noTransactionHistory,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : AppColors.slate800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.cardDark : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+                  ),
+                  child: Column(
+                    children: txList.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final tx = entry.value;
+                      final credit = tx.isCredit(currentUserId);
+                      final isDeposit = tx.senderId == null;
+                      final icon = isDeposit
+                          ? Icons.add_card_rounded
+                          : credit
+                              ? Icons.arrow_downward_rounded
+                              : Icons.send_rounded;
+                      final color = credit || isDeposit ? AppColors.green600 : AppColors.primary;
+                      final bg = credit || isDeposit ? const Color(0xFFDCFCE7) : const Color(0xFFDBEAFE);
+                      final amountStr = '${credit || isDeposit ? '+' : '-'}₺${tx.amount.toStringAsFixed(2)}';
+                      final subtitle = '${tx.date.day}.${tx.date.month}.${tx.date.year}';
+
+                      return Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 42,
+                                  height: 42,
+                                  decoration: BoxDecoration(
+                                    color: isDark ? color.withValues(alpha: 0.2) : bg,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(icon, color: color, size: 20),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        tx.description?.isNotEmpty == true
+                                            ? tx.description!
+                                            : (isDeposit ? 'Bakiye Yükleme' : 'Transfer'),
+                                        style: TextStyle(
                                           fontWeight: FontWeight.w600,
                                           fontSize: 14,
-                                          color: isDark
-                                              ? Colors.white
-                                              : AppColors.slate900)),
-                                  Text(t.subtitle,
-                                      style: const TextStyle(
-                                          color: AppColors.slate400,
-                                          fontSize: 12)),
-                                ],
-                              ),
+                                          color: isDark ? Colors.white : AppColors.slate900,
+                                        ),
+                                      ),
+                                      Text(subtitle, style: const TextStyle(color: AppColors.slate400, fontSize: 12)),
+                                    ],
+                                  ),
+                                ),
+                                Text(
+                                  amountStr,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: credit || isDeposit
+                                        ? AppColors.green600
+                                        : (isDark ? Colors.white : AppColors.slate900),
+                                  ),
+                                ),
+                              ],
                             ),
-                            Text(
-                              t.amount,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                                color: t.isCredit
-                                    ? AppColors.green600
-                                    : (isDark
-                                    ? Colors.white
-                                    : AppColors.slate900),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (i < transactions.length - 1)
-                        Divider(
-                            height: 1,
-                            color: isDark
-                                ? AppColors.slate700
-                                : AppColors.slate100),
-                    ],
-                  );
-                }).toList(),
-              ),
+                          ),
+                          if (i < txList.length - 1)
+                            Divider(height: 1, color: isDark ? AppColors.slate700 : AppColors.slate100),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                );
+              },
             ),
         ],
       ),

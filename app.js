@@ -279,6 +279,42 @@ app.post('/api/transactions/send', authenticateToken, async (req, res) => {
 
 
 
+// --- GET TRANSACTIONS ---
+app.get('/api/transactions', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    try {
+        const result = await pool.query(
+            `SELECT * FROM transactions
+             WHERE sender_id = $1 OR receiver_id = $1
+             ORDER BY date DESC
+             LIMIT 50`,
+            [userId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Could not fetch transactions" });
+    }
+});
+
+// --- GET ACTIVITIES (AUDIT LOG) ---
+app.get('/api/activities', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    try {
+        const result = await pool.query(
+            `SELECT * FROM activities
+             WHERE owner_id = $1
+             ORDER BY date DESC
+             LIMIT 50`,
+            [userId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Could not fetch activities" });
+    }
+});
+
 // Mobile-Ready Listener: Listening on 0.0.0.0 allows network access
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', () => {

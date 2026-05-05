@@ -12,6 +12,7 @@ import 'providers/market_provider.dart';
 import 'providers/portfolio_provider.dart';
 import 'providers/cashback_provider.dart';
 import 'providers/admin_provider.dart';
+import 'providers/transaction_provider.dart';
 
 void main() {
   runApp(
@@ -23,6 +24,10 @@ void main() {
         ChangeNotifierProxyProvider<AuthProvider, WalletProvider>(
           create: (_) => WalletProvider(),
           update: (_, auth, w) => w!..updateAuth(auth),
+        ),
+        ChangeNotifierProxyProvider<AuthProvider, TransactionProvider>(
+          create: (_) => TransactionProvider(),
+          update: (_, auth, t) => t!..updateAuth(auth),
         ),
         ChangeNotifierProxyProvider<AuthProvider, MarketProvider>(
           create: (_) => MarketProvider(),

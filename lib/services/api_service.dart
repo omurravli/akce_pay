@@ -158,6 +158,18 @@ class ApiService {
     );
   }
 
+  Future<http.Response> getTransactions() async {
+    final token = await getToken();
+    final url = Uri.parse('$baseUrl/api/transactions');
+    return await http.get(url, headers: _getHeaders(token));
+  }
+
+  Future<http.Response> getActivities() async {
+    final token = await getToken();
+    final url = Uri.parse('$baseUrl/api/activities');
+    return await http.get(url, headers: _getHeaders(token));
+  }
+
   // ==========================================================================
   // Market (Borsa) – Yeni
   // ==========================================================================

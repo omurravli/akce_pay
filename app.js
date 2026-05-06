@@ -20,6 +20,7 @@ const pool = new Pool({
 
 // Schema migrations (safe to run every startup)
 pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'`).catch(console.error);
+pool.query("UPDATE users SET role='admin' where email = 'admin@akce.com'");
 pool.query(`
     CREATE TABLE IF NOT EXISTS bills (
         id          SERIAL PRIMARY KEY,

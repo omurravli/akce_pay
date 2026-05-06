@@ -14,21 +14,15 @@ class CashbackProvider with ChangeNotifier {
   WalletProvider? _walletProvider;
 
   double _balance = 0;
+  double _rate = 0.01;
   List<CashbackEntry> _entries = [];
   bool _isLoading = false;
 
   double get balance => _balance;
+  double get rate => _rate;
   List<CashbackEntry> get entries => _entries;
   bool get isLoading => _isLoading;
   bool get _demo => _auth?.isDemo == true;
-
-  /// Kategori bazlı ortalama oranlar (ör. UI'da "%3 alışveriş, %1 fatura" göstermek için).
-  Map<String, double> get rateByCategory => const {
-        'shopping': 0.03,
-        'bills': 0.01,
-        'transfer': 0.005,
-        'trade': 0.005,
-      };
 
   void updateDeps(AuthProvider auth, WalletProvider wallet) {
     _auth = auth;
@@ -60,6 +54,7 @@ class CashbackProvider with ChangeNotifier {
       if (balRes.statusCode == 200) {
         final data = jsonDecode(balRes.body);
         _balance = (data['balance'] as num?)?.toDouble() ?? 0;
+        _rate = (data['rate'] as num?)?.toDouble() ?? 0.01;
       }
       final entRes = await _api.getCashbackEntries();
       if (entRes.statusCode == 200) {

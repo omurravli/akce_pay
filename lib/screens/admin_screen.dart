@@ -19,6 +19,7 @@ class AdminScreen extends StatefulWidget {
 class _AdminScreenState extends State<AdminScreen> {
   final _searchController = TextEditingController();
   String _query = '';
+  double? _cashbackRate;
 
   @override
   void initState() {
@@ -29,6 +30,15 @@ class _AdminScreenState extends State<AdminScreen> {
     _searchController.addListener(() {
       setState(() => _query = _searchController.text.toLowerCase());
     });
+    _fetchSettings();
+  }
+
+  Future<void> _fetchSettings() async {
+    final res = await ApiService().getAdminSettings();
+    if (res.statusCode == 200 && mounted) {
+      final data = jsonDecode(res.body);
+      setState(() => _cashbackRate = (data['cashback_rate'] as num).toDouble());
+    }
   }
 
   @override
@@ -81,6 +91,8 @@ class _AdminScreenState extends State<AdminScreen> {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
               children: [
                 _buildStatsGrid(l, isDark, ap.stats),
+                const SizedBox(height: 16),
+                _buildSettingsCard(isDark),
                 const SizedBox(height: 16),
                 // Search bar
                 TextField(
@@ -164,6 +176,119 @@ class _AdminScreenState extends State<AdminScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildSettingsCard(bool isDark) {
+    final rate = _cashbackRate;
+    final pct = rate != null ? '${(rate * 100).toStringAsFixed(1)}%' : '—';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+      ),
+      child: Row(children: [
+        Container(
+          width: 40, height: 40,
+          decoration: BoxDecoration(
+              color: AppColors.green600.withValues(alpha: isDark ? 0.2 : 0.12),
+              shape: BoxShape.circle),
+          child: const Icon(Icons.local_atm_rounded, color: AppColors.green600, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Cashback Oranı',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
+                  color: isDark ? Colors.white : AppColors.slate900)),
+          const Text('Fatura ve transfer ödemelerinde uygulanır',
+              style: TextStyle(fontSize: 11, color: AppColors.slate400)),
+        ])),
+        Text(pct,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
+                color: AppColors.green600)),
+        const SizedBox(width: 8),
+        IconButton(
+          icon: Icon(Icons.edit_rounded, size: 18,
+              color: isDark ? AppColors.slate300 : AppColors.slate500),
+          onPressed: () => _showEditRateDialog(isDark),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+      ]),
+    );
+  }
+
+  Future<void> _showEditRateDialog(bool isDark) async {
+    final ctrl = TextEditingController(
+        text: _cashbackRate != null
+            ? (_cashbackRate! * 100).toStringAsFixed(1)
+            : '1.0');
+    final messenger = ScaffoldMessenger.of(context);
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.cardDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Cashback Oranı',
+            style: TextStyle(fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : AppColors.slate900)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text('Tüm ödemelere uygulanacak cashback yüzdesi.',
+              style: TextStyle(color: AppColors.slate400, fontSize: 13)),
+          const SizedBox(height: 16),
+          TextField(
+            controller: ctrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: TextStyle(color: isDark ? Colors.white : AppColors.slate900),
+            decoration: InputDecoration(
+              labelText: 'Oran (%)',
+              suffixText: '%',
+              labelStyle: const TextStyle(color: AppColors.slate400, fontSize: 13),
+              filled: true,
+              fillColor: isDark ? AppColors.slate800 : AppColors.slate50,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ]),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('İptal', style: TextStyle(color: AppColors.slate400)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final pct = double.tryParse(ctrl.text.replaceAll(',', '.'));
+              if (pct == null || pct < 0 || pct > 100) return;
+              Navigator.pop(ctx);
+              final res = await ApiService()
+                  .updateAdminSettings(cashbackRate: pct / 100);
+              if (!mounted) return;
+              if (res.statusCode == 200) {
+                setState(() => _cashbackRate = pct / 100);
+                messenger.showSnackBar(
+                    const SnackBar(content: Text('Cashback oranı güncellendi')));
+              } else {
+                messenger.showSnackBar(SnackBar(
+                    content: Text(jsonDecode(res.body)['error'] ?? 'Hata')));
+              }
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.green600,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0),
+            child: const Text('Kaydet',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

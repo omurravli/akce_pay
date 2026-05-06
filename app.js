@@ -56,6 +56,31 @@ pool.query(`
         UNIQUE(user_id, symbol)
     )
 `).catch(console.error);
+pool.query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+        key   VARCHAR(50) PRIMARY KEY,
+        value TEXT NOT NULL
+    )
+`).catch(console.error);
+pool.query(`INSERT INTO app_settings (key, value) VALUES ('cashback_rate', '0.01') ON CONFLICT (key) DO NOTHING`).catch(console.error);
+pool.query(`
+    CREATE TABLE IF NOT EXISTS cashback_balances (
+        user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        balance DECIMAL(12,2) NOT NULL DEFAULT 0
+    )
+`).catch(console.error);
+pool.query(`
+    CREATE TABLE IF NOT EXISTS cashback_entries (
+        id           SERIAL PRIMARY KEY,
+        user_id      UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        amount       DECIMAL(12,2) NOT NULL,
+        spent_amount DECIMAL(12,2) NOT NULL,
+        rate         DECIMAL(6,4)  NOT NULL,
+        category     VARCHAR(50)   NOT NULL,
+        description  VARCHAR(255),
+        created_at   TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+    )
+`).catch(console.error);
 
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
@@ -292,6 +317,8 @@ app.post('/api/transactions/send', authenticateToken, async (req, res) => {
             ]
         );
 
+        const cashbackRate = await getCashbackRate();
+        await earnCashback(client, senderIdFromToken, amount, 'transfer', description || 'Para transferi', cashbackRate);
         await client.query('COMMIT');
 
         // Log to activities for audit as well
@@ -580,16 +607,17 @@ app.get('/api/users/search', authenticateToken, async (req, res) => {
 // --- ADMIN: STATS ---
 app.get('/api/admin/stats', authenticateToken, async (req, res) => {
     try {
-        const [users, txns, vol] = await Promise.all([
+        const [users, txns, cashback] = await Promise.all([
             pool.query(`SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'active') AS active FROM users`),
             pool.query(`SELECT COUNT(*) AS total, COALESCE(SUM(amount), 0) AS volume FROM transactions`),
+            pool.query(`SELECT COALESCE(SUM(amount), 0) AS total FROM cashback_entries`),
         ]);
         res.json({
             total_users: parseInt(users.rows[0].total),
             active_users: parseInt(users.rows[0].active),
             total_transactions: parseInt(txns.rows[0].total),
             total_volume: parseFloat(txns.rows[0].volume),
-            total_cashback_paid: 0,
+            total_cashback_paid: parseFloat(cashback.rows[0].total),
         });
     } catch (err) {
         console.error(err);
@@ -677,6 +705,26 @@ async function requireAdmin(req, res) {
         return false;
     }
     return true;
+}
+
+async function getCashbackRate() {
+    const { rows } = await pool.query("SELECT value FROM app_settings WHERE key = 'cashback_rate'");
+    return rows.length ? parseFloat(rows[0].value) : 0.01;
+}
+
+async function earnCashback(client, userId, spentAmount, category, description, rate) {
+    const cashbackAmount = Math.round(parseFloat(spentAmount) * rate * 100) / 100;
+    if (cashbackAmount <= 0) return;
+    await client.query(
+        `INSERT INTO cashback_balances (user_id, balance) VALUES ($1, $2)
+         ON CONFLICT (user_id) DO UPDATE SET balance = cashback_balances.balance + $2`,
+        [userId, cashbackAmount]
+    );
+    await client.query(
+        `INSERT INTO cashback_entries (user_id, amount, spent_amount, rate, category, description)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [userId, cashbackAmount, spentAmount, rate, category, description]
+    );
 }
 
 // POST /api/admin/users/:id/bills
@@ -790,6 +838,8 @@ app.post('/api/bills/:id/pay', authenticateToken, async (req, res) => {
              VALUES ($1, $2, $3, $4, 'BILL_PAYMENT', 'SUCCESS')`,
             [userId, wallet_id, bill.amount, bill.description || `${bill.category} faturası`]
         );
+        const cashbackRate = await getCashbackRate();
+        await earnCashback(client, userId, bill.amount, 'bills', bill.description || `${bill.category} faturası`, cashbackRate);
         await client.query('COMMIT');
 
         pool.query(
@@ -804,6 +854,123 @@ app.post('/api/bills/:id/pay', authenticateToken, async (req, res) => {
         res.status(400).json({ error: err.message });
     } finally {
         client.release();
+    }
+});
+
+// ==========================================================================
+// CASHBACK — User side
+// ==========================================================================
+
+// GET /api/cashback/balance
+app.get('/api/cashback/balance', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    try {
+        const [balRes, rateRes] = await Promise.all([
+            pool.query('SELECT balance FROM cashback_balances WHERE user_id = $1', [userId]),
+            pool.query("SELECT value FROM app_settings WHERE key = 'cashback_rate'"),
+        ]);
+        res.json({
+            balance: balRes.rows.length ? parseFloat(balRes.rows[0].balance) : 0,
+            rate: rateRes.rows.length ? parseFloat(rateRes.rows[0].value) : 0.01,
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Cashback bakiyesi alınamadı' });
+    }
+});
+
+// GET /api/cashback/entries
+app.get('/api/cashback/entries', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    try {
+        const { rows } = await pool.query(
+            `SELECT id, amount AS cashback_amount, spent_amount, rate, category, description, created_at
+             FROM cashback_entries WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+            [userId]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Cashback geçmişi alınamadı' });
+    }
+});
+
+// POST /api/cashback/withdraw
+app.post('/api/cashback/withdraw', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    const { wallet_id } = req.body;
+    if (!wallet_id) return res.status(400).json({ error: 'wallet_id zorunlu' });
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const balRes = await client.query(
+            'SELECT balance FROM cashback_balances WHERE user_id = $1 FOR UPDATE',
+            [userId]
+        );
+        const balance = balRes.rows.length ? parseFloat(balRes.rows[0].balance) : 0;
+        if (balance <= 0) throw new Error('Cashback bakiyeniz yok');
+
+        const walletRes = await client.query(
+            'SELECT owner_id FROM wallets WHERE wallet_id = $1',
+            [wallet_id]
+        );
+        if (!walletRes.rows.length || walletRes.rows[0].owner_id !== userId)
+            throw new Error('Cüzdan bulunamadı');
+
+        await client.query('UPDATE cashback_balances SET balance = 0 WHERE user_id = $1', [userId]);
+        await client.query('UPDATE wallets SET balance = balance + $1 WHERE wallet_id = $2', [balance, wallet_id]);
+        await client.query(
+            `INSERT INTO transactions (sender_id, sender_wallet_id, receiver_id, receiver_wallet_id, amount, description, type, status)
+             VALUES ($1, $2, $1, $2, $3, 'Cashback iadesi', 'CASHBACK', 'SUCCESS')`,
+            [userId, wallet_id, balance]
+        );
+        await client.query('COMMIT');
+
+        res.json({ success: true, newBalance: 0 });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==========================================================================
+// ADMIN — Settings
+// ==========================================================================
+
+// GET /api/admin/settings
+app.get('/api/admin/settings', authenticateToken, async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    try {
+        const { rows } = await pool.query('SELECT key, value FROM app_settings');
+        const map = {};
+        rows.forEach(r => { map[r.key] = r.value; });
+        res.json({ cashback_rate: parseFloat(map['cashback_rate'] || '0.01') });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ayarlar alınamadı' });
+    }
+});
+
+// PATCH /api/admin/settings
+app.patch('/api/admin/settings', authenticateToken, async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const { cashback_rate } = req.body;
+    if (cashback_rate === undefined || isNaN(Number(cashback_rate)) || cashback_rate < 0 || cashback_rate > 1)
+        return res.status(400).json({ error: 'cashback_rate 0 ile 1 arasında olmalı' });
+    try {
+        await pool.query(
+            `INSERT INTO app_settings (key, value) VALUES ('cashback_rate', $1)
+             ON CONFLICT (key) DO UPDATE SET value = $1`,
+            [cashback_rate.toString()]
+        );
+        res.json({ success: true, cashback_rate });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Ayar güncellenemedi' });
     }
 });
 

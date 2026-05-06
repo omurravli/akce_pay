@@ -208,7 +208,7 @@ class _CashbackScreenState extends State<CashbackScreen> {
 
   Widget _buildHowItWorks(
       AppLocalizations l, bool isDark, CashbackProvider cb) {
-    final rates = cb.rateByCategory;
+    final pct = (cb.rate * 100).toStringAsFixed(1);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -217,50 +217,39 @@ class _CashbackScreenState extends State<CashbackScreen> {
         border: Border.all(
             color: isDark ? AppColors.slate700 : AppColors.slate100),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(l.cashbackRates,
-              style: TextStyle(
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+                color: AppColors.green600.withValues(alpha: isDark ? 0.2 : 0.12),
+                shape: BoxShape.circle),
+            child: const Icon(Icons.local_atm_rounded,
+                color: AppColors.green600, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(l.cashbackRates,
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: isDark ? Colors.white : AppColors.slate800)),
+                const SizedBox(height: 2),
+                const Text('Fatura ve para transferlerinde geçerli',
+                    style: TextStyle(
+                        fontSize: 12, color: AppColors.slate400)),
+              ],
+            ),
+          ),
+          Text('%$pct',
+              style: const TextStyle(
+                  fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isDark ? Colors.white : AppColors.slate800)),
-          const SizedBox(height: 10),
-          ...rates.entries.map((e) {
-            final pct = (e.value * 100).toStringAsFixed(1);
-            final color = _colorForCategory(e.key);
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                        color: color.withOpacity(isDark ? 0.2 : 0.12),
-                        shape: BoxShape.circle),
-                    child: Icon(_iconForCategory(e.key),
-                        color: color, size: 16),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(_categoryLabel(l, e.key),
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: isDark
-                                ? Colors.white
-                                : AppColors.slate800)),
-                  ),
-                  Text('%$pct',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: color)),
-                ],
-              ),
-            );
-          }),
+                  color: AppColors.green600)),
         ],
       ),
     );
@@ -276,7 +265,7 @@ class _CashbackScreenState extends State<CashbackScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-                color: color.withOpacity(isDark ? 0.2 : 0.12),
+                color: color.withValues(alpha: isDark ? 0.2 : 0.12),
                 shape: BoxShape.circle),
             child: Icon(_iconForCategory(c.category), color: color, size: 18),
           ),

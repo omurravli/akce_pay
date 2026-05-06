@@ -629,12 +629,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             MaterialPageRoute(builder: (_) => const PayBillsScreen())),
       ),
       (
-        icon: Icons.swap_vert_rounded,
-        label: l.tradeBuySell,
-        onTap: () => Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const TradingScreen())),
-      ),
-      (
         icon: Icons.pie_chart_rounded,
         label: l.portfolio,
         onTap: () => Navigator.push(context,

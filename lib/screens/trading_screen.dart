@@ -247,11 +247,12 @@ class _TradingScreenState extends State<TradingScreen>
               ),
               GestureDetector(
                 onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
                   final ok = tracked
                       ? await sp.untrackStock(r.symbol)
                       : await sp.trackStock(r.symbol, r.name);
                   if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    messenger.showSnackBar(SnackBar(
                       content: Text(ok
                           ? (tracked ? '${r.symbol} takipten çıkarıldı' : '${r.symbol} takip listesine eklendi')
                           : 'İşlem başarısız, tekrar deneyin'),
@@ -354,11 +355,12 @@ class _TradingScreenState extends State<TradingScreen>
 
   Future<void> _toggleTrack(MarketRate r, StocksProvider sp) async {
     final tracked = sp.isTracked(r.symbol);
+    final messenger = ScaffoldMessenger.of(context);
     final ok = tracked
         ? await sp.untrackStock(r.symbol)
         : await sp.trackStock(r.symbol, r.name);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      messenger.showSnackBar(SnackBar(
         content: Text(ok
             ? (tracked ? '${r.symbol} takipten çıkarıldı' : '${r.symbol} takip listesine eklendi')
             : 'İşlem başarısız, tekrar deneyin'),
@@ -415,11 +417,12 @@ class _TradingScreenState extends State<TradingScreen>
                           ),
                           GestureDetector(
                             onTap: () async {
+                              final messenger = ScaffoldMessenger.of(context);
                               final ok = tracked
                                   ? await sp2.untrackStock(r.symbol)
                                   : await sp2.trackStock(r.symbol, r.name);
-                              if (ctx.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              if (mounted) {
+                                messenger.showSnackBar(SnackBar(
                                   content: Text(ok
                                       ? (tracked ? 'Takipten çıkarıldı' : 'Takip listesine eklendi')
                                       : 'İşlem başarısız'),

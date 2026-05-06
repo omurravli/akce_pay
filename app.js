@@ -21,6 +21,19 @@ const pool = new Pool({
 // Schema migrations (safe to run every startup)
 pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'`).catch(console.error);
 pool.query(`
+    CREATE TABLE IF NOT EXISTS holdings (
+        id           SERIAL PRIMARY KEY,
+        user_id      UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        symbol       VARCHAR(20)   NOT NULL,
+        name         VARCHAR(100),
+        quantity     DECIMAL(18,8) NOT NULL DEFAULT 0,
+        average_cost DECIMAL(18,4) NOT NULL DEFAULT 0,
+        created_at   TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+        updated_at   TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, symbol)
+    )
+`).catch(console.error);
+pool.query(`
     CREATE TABLE IF NOT EXISTS tracked_stocks (
         id          SERIAL PRIMARY KEY,
         user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -637,6 +650,172 @@ app.patch('/api/admin/users/:id', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Update failed' });
+    }
+});
+
+// ==========================================================================
+// PORTFOLIO & TRADING
+// ==========================================================================
+
+// GET /api/portfolio/holdings
+app.get('/api/portfolio/holdings', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    try {
+        const { rows } = await pool.query(
+            'SELECT * FROM holdings WHERE user_id = $1 AND quantity > 0.00000001 ORDER BY created_at',
+            [userId]
+        );
+        const stocks = await getStockCache();
+        const market = await getMarketRates();
+        const result = rows.map(h => {
+            const s = stocks[h.symbol];
+            const m = market.find(r => r.symbol === h.symbol);
+            const current_price = s?.sell_price || m?.sell_price || 0;
+            return {
+                symbol: h.symbol,
+                name: h.name,
+                quantity: parseFloat(h.quantity),
+                average_cost: parseFloat(h.average_cost),
+                current_price,
+            };
+        });
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Could not fetch holdings' });
+    }
+});
+
+// POST /api/trade/buy  body: { symbol, amount_tl }
+app.post('/api/trade/buy', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    const { symbol, amount_tl } = req.body;
+    if (!symbol || !amount_tl || amount_tl <= 0)
+        return res.status(400).json({ error: 'symbol ve amount_tl zorunlu' });
+
+    const sym = symbol.toUpperCase();
+    const stocks = await getStockCache();
+    const market = await getMarketRates();
+    const price = stocks[sym]?.sell_price || market.find(r => r.symbol === sym)?.sell_price;
+    if (!price || price <= 0)
+        return res.status(400).json({ error: 'Fiyat verisi alınamadı' });
+
+    const name = stocks[sym]?.name || market.find(r => r.symbol === sym)?.name || sym;
+    const quantity = amount_tl / price;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const walletRes = await client.query(
+            `SELECT wallet_id, balance FROM wallets WHERE owner_id = $1 AND wallet_type = 'TL' FOR UPDATE`,
+            [userId]
+        );
+        if (!walletRes.rows.length) throw new Error('Cüzdan bulunamadı');
+        const { wallet_id, balance } = walletRes.rows[0];
+        if (parseFloat(balance) < amount_tl) throw new Error('Yetersiz bakiye');
+
+        await client.query(
+            'UPDATE wallets SET balance = balance - $1 WHERE wallet_id = $2',
+            [amount_tl, wallet_id]
+        );
+        await client.query(`
+            INSERT INTO holdings (user_id, symbol, name, quantity, average_cost)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (user_id, symbol) DO UPDATE SET
+                average_cost = (holdings.quantity * holdings.average_cost + $4 * $5)
+                               / (holdings.quantity + $4),
+                quantity     = holdings.quantity + $4,
+                updated_at   = NOW()
+        `, [userId, sym, name, quantity, price]);
+        await client.query(
+            `INSERT INTO transactions (sender_id, sender_wallet_id, amount, description, type, status)
+             VALUES ($1, $2, $3, $4, 'TRADE_BUY', 'SUCCESS')`,
+            [userId, wallet_id, amount_tl, `${sym} alış – ${quantity.toFixed(4)} adet @ ₺${price}`]
+        );
+        await client.query('COMMIT');
+
+        pool.query(
+            `INSERT INTO activities (owner_id, type, description) VALUES ($1, 'TRADE_BUY', $2)`,
+            [userId, `${sym} alış – ${quantity.toFixed(4)} adet @ ₺${price}`]
+        ).catch(() => {});
+
+        res.json({ success: true, quantity, price });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// POST /api/trade/sell  body: { symbol, quantity }
+app.post('/api/trade/sell', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    const { symbol, quantity } = req.body;
+    if (!symbol || !quantity || quantity <= 0)
+        return res.status(400).json({ error: 'symbol ve quantity zorunlu' });
+
+    const sym = symbol.toUpperCase();
+    const stocks = await getStockCache();
+    const market = await getMarketRates();
+    const price = stocks[sym]?.buy_price || market.find(r => r.symbol === sym)?.buy_price;
+    if (!price || price <= 0)
+        return res.status(400).json({ error: 'Fiyat verisi alınamadı' });
+
+    const proceeds = quantity * price;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const holdingRes = await client.query(
+            'SELECT id, quantity FROM holdings WHERE user_id = $1 AND symbol = $2 FOR UPDATE',
+            [userId, sym]
+        );
+        if (!holdingRes.rows.length) throw new Error('Bu varlık portföyünüzde yok');
+        const holding = holdingRes.rows[0];
+        if (parseFloat(holding.quantity) < quantity - 0.000001)
+            throw new Error('Yetersiz miktar');
+
+        const newQty = parseFloat(holding.quantity) - quantity;
+        if (newQty <= 0.000001) {
+            await client.query('DELETE FROM holdings WHERE id = $1', [holding.id]);
+        } else {
+            await client.query(
+                'UPDATE holdings SET quantity = $1, updated_at = NOW() WHERE id = $2',
+                [newQty, holding.id]
+            );
+        }
+
+        const walletRes = await client.query(
+            `SELECT wallet_id FROM wallets WHERE owner_id = $1 AND wallet_type = 'TL'`,
+            [userId]
+        );
+        if (!walletRes.rows.length) throw new Error('Cüzdan bulunamadı');
+        const sellWalletId = walletRes.rows[0].wallet_id;
+        await client.query(
+            'UPDATE wallets SET balance = balance + $1 WHERE wallet_id = $2',
+            [proceeds, sellWalletId]
+        );
+        await client.query(
+            `INSERT INTO transactions (receiver_id, receiver_wallet_id, amount, description, type, status)
+             VALUES ($1, $2, $3, $4, 'TRADE_SELL', 'SUCCESS')`,
+            [userId, sellWalletId, proceeds, `${sym} satış – ${quantity} adet @ ₺${price}`]
+        );
+        await client.query('COMMIT');
+
+        pool.query(
+            `INSERT INTO activities (owner_id, type, description) VALUES ($1, 'TRADE_SELL', $2)`,
+            [userId, `${sym} satış – ${quantity} adet @ ₺${price}`]
+        ).catch(() => {});
+
+        res.json({ success: true, proceeds, price });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 

@@ -7,6 +7,7 @@ import '../models/asset.dart';
 import '../providers/market_provider.dart';
 import '../providers/portfolio_provider.dart';
 import '../providers/stocks_provider.dart';
+import '../providers/wallet_provider.dart';
 
 class TradingScreen extends StatefulWidget {
   const TradingScreen({super.key, this.initialSymbol});
@@ -388,52 +389,55 @@ class _TradingScreenState extends State<TradingScreen>
     }
   }
 
-  void _showStockDetail(BuildContext ctx, MarketRate r) {
+  void _showStockDetail(BuildContext ctx, MarketRate r, {bool isStock = true}) {
     final isDark = Theme.of(ctx).brightness == Brightness.dark;
     final color = _colorFor(r.symbol);
     showModalBottomSheet(
       context: ctx,
+      isScrollControlled: true,
       backgroundColor: isDark ? AppColors.cardDark : Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModalState) {
-            return Consumer<StocksProvider>(
-              builder: (ctx, sp2, _) {
-                final tracked = sp2.isTracked(r.symbol);
-                return Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(width: 40, height: 4,
-                          decoration: BoxDecoration(color: AppColors.slate300,
-                              borderRadius: BorderRadius.circular(2))),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Container(
-                            width: 52, height: 52,
-                            decoration: BoxDecoration(
-                              color: color.withValues(alpha: isDark ? 0.2 : 0.12),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(_iconFor(r.symbol), color: color, size: 26),
+      builder: (sheetCtx) {
+        return Consumer<StocksProvider>(
+          builder: (sheetCtx, sp2, _) {
+            final tracked = sp2.isTracked(r.symbol);
+            return Padding(
+              padding: EdgeInsets.fromLTRB(20, 12, 20,
+                  MediaQuery.of(sheetCtx).viewInsets.bottom + 32),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(child: Container(width: 40, height: 4,
+                        decoration: BoxDecoration(color: AppColors.slate300,
+                            borderRadius: BorderRadius.circular(2)))),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Container(
+                          width: 52, height: 52,
+                          decoration: BoxDecoration(
+                            color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                            shape: BoxShape.circle,
                           ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(r.name, style: TextStyle(fontSize: 17,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.white : AppColors.slate900)),
-                                Text('${r.symbol} · Borsa İstanbul',
-                                    style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
-                              ],
-                            ),
+                          child: Icon(_iconFor(r.symbol), color: color, size: 26),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(r.name, style: TextStyle(fontSize: 17,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : AppColors.slate900)),
+                              Text('${r.symbol} · ${isStock ? 'Borsa İstanbul' : 'Emtia & Döviz'}',
+                                  style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+                            ],
                           ),
+                        ),
+                        if (isStock)
                           GestureDetector(
                             onTap: () async {
                               final messenger = ScaffoldMessenger.of(context);
@@ -474,34 +478,37 @@ class _TradingScreenState extends State<TradingScreen>
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(child: _detailCell(isDark, 'Son Fiyat',
-                              r.sellPrice > 0 ? '₺${r.sellPrice.toStringAsFixed(2)}' : '—')),
-                          const SizedBox(width: 10),
-                          Expanded(child: _detailCell(isDark, 'Değişim',
-                              r.sellPrice > 0 ? '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%' : '—',
-                              valueColor: r.sellPrice > 0 ? (r.isUp ? AppColors.green600 : AppColors.red500) : null)),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(child: _detailCell(isDark, 'Alış', r.buyPrice > 0 ? '₺${r.buyPrice.toStringAsFixed(2)}' : '—')),
-                          const SizedBox(width: 10),
-                          Expanded(child: _detailCell(isDark, 'Satış', r.sellPrice > 0 ? '₺${r.sellPrice.toStringAsFixed(2)}' : '—')),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      _detailCell(isDark, 'Güncellenme',
-                          '${r.updatedAt.hour.toString().padLeft(2, '0')}:${r.updatedAt.minute.toString().padLeft(2, '0')} · ${r.updatedAt.day}.${r.updatedAt.month}.${r.updatedAt.year}'),
-                    ],
-                  ),
-                );
-              },
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(child: _detailCell(isDark, 'Son Fiyat',
+                            r.sellPrice > 0 ? '₺${r.sellPrice.toStringAsFixed(2)}' : '—')),
+                        const SizedBox(width: 10),
+                        Expanded(child: _detailCell(isDark, 'Değişim',
+                            r.sellPrice > 0 ? '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%' : '—',
+                            valueColor: r.sellPrice > 0 ? (r.isUp ? AppColors.green600 : AppColors.red500) : null)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(child: _detailCell(isDark, 'Alış', r.buyPrice > 0 ? '₺${r.buyPrice.toStringAsFixed(2)}' : '—')),
+                        const SizedBox(width: 10),
+                        Expanded(child: _detailCell(isDark, 'Satış', r.sellPrice > 0 ? '₺${r.sellPrice.toStringAsFixed(2)}' : '—')),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _detailCell(isDark, 'Güncellenme',
+                        '${r.updatedAt.hour.toString().padLeft(2, '0')}:${r.updatedAt.minute.toString().padLeft(2, '0')} · ${r.updatedAt.day}.${r.updatedAt.month}.${r.updatedAt.year}'),
+                    const SizedBox(height: 16),
+                    Divider(color: isDark ? AppColors.slate700 : AppColors.slate100),
+                    const SizedBox(height: 8),
+                    _TradeSheet(rate: r, isDark: isDark),
+                  ],
+                ),
+              ),
             );
           },
         );
@@ -558,89 +565,90 @@ class _TradingScreenState extends State<TradingScreen>
   Widget _buildRateCard(AppLocalizations l, bool isDark, MarketRate r) {
     final color = _colorFor(r.symbol);
     return Container(
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
             color: isDark ? AppColors.slate700 : AppColors.slate100),
       ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: color.withOpacity(isDark ? 0.2 : 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(_iconFor(r.symbol), color: color, size: 22),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(l.assetName(r.symbol, r.name),
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color:
-                                isDark ? Colors.white : AppColors.slate900)),
-                    Text(r.symbol,
-                        style: const TextStyle(
-                            color: AppColors.slate400, fontSize: 11)),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: (r.isUp ? AppColors.green500 : AppColors.red500)
-                      .withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(r.isUp ? Icons.trending_up : Icons.trending_down,
-                        size: 14,
-                        color:
-                            r.isUp ? AppColors.green600 : AppColors.red500),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color:
-                            r.isUp ? AppColors.green600 : AppColors.red500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _priceCell(
-                    isDark, l.buyPrice, '₺${r.buyPrice.toStringAsFixed(2)}'),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _priceCell(isDark, l.sellPrice,
-                    '₺${r.sellPrice.toStringAsFixed(2)}'),
-              ),
-            ],
-          ),
-        ],
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _showStockDetail(context, r, isStock: false),
+          child: Padding(padding: const EdgeInsets.all(16), child: _rateCardContent(l, isDark, r, color)),
+        ),
       ),
+    );
+  }
+
+  Widget _rateCardContent(AppLocalizations l, bool isDark, MarketRate r, Color color) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(_iconFor(r.symbol), color: color, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l.assetName(r.symbol, r.name),
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: isDark ? Colors.white : AppColors.slate900)),
+                  Text(r.symbol,
+                      style: const TextStyle(
+                          color: AppColors.slate400, fontSize: 11)),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: (r.isUp ? AppColors.green500 : AppColors.red500)
+                    .withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(r.isUp ? Icons.trending_up : Icons.trending_down,
+                      size: 14,
+                      color: r.isUp ? AppColors.green600 : AppColors.red500),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: r.isUp ? AppColors.green600 : AppColors.red500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            Expanded(child: _priceCell(isDark, l.buyPrice, '₺${r.buyPrice.toStringAsFixed(2)}')),
+            const SizedBox(width: 8),
+            Expanded(child: _priceCell(isDark, l.sellPrice, '₺${r.sellPrice.toStringAsFixed(2)}')),
+          ],
+        ),
+      ],
     );
   }
 
@@ -796,4 +804,206 @@ class _TradingScreenState extends State<TradingScreen>
     );
   }
 
+}
+
+// ── Buy / Sell sheet ─────────────────────────────────────────────────────────
+class _TradeSheet extends StatefulWidget {
+  final MarketRate rate;
+  final bool isDark;
+  const _TradeSheet({required this.rate, required this.isDark});
+
+  @override
+  State<_TradeSheet> createState() => _TradeSheetState();
+}
+
+class _TradeSheetState extends State<_TradeSheet> {
+  bool _isBuying = true;
+  final _ctrl = TextEditingController();
+  bool _loading = false;
+
+  String get _unit {
+    final s = widget.rate.symbol;
+    if (s.startsWith('GOLD') || s.startsWith('SILVER')) return 'gr';
+    return 'adet';
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.rate;
+    final isDark = widget.isDark;
+    return Consumer2<PortfolioProvider, WalletProvider>(
+      builder: (ctx, pp, wp, _) {
+        final tlBalance = wp.wallets
+            .where((w) => w.walletType == 'TL')
+            .fold(0.0, (s, w) => s + w.balance);
+        final holdingList = pp.holdings.where((h) => h.symbol == r.symbol).toList();
+        final currentHolding = holdingList.isNotEmpty ? holdingList.first : null;
+
+        final inputVal = double.tryParse(_ctrl.text.replaceAll(',', '.')) ?? 0;
+        final estimatedUnits = (_isBuying && r.sellPrice > 0 && inputVal > 0)
+            ? inputVal / r.sellPrice : 0.0;
+        final estimatedProceeds = (!_isBuying && r.buyPrice > 0 && inputVal > 0)
+            ? inputVal * r.buyPrice : 0.0;
+
+        final canBuy = r.sellPrice > 0 && inputVal > 0 && inputVal <= tlBalance && !_loading;
+        final canSell = r.buyPrice > 0 && inputVal > 0 && !_loading &&
+            currentHolding != null && inputVal <= currentHolding.quantity + 0.000001;
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Expanded(child: _tab('Al', _isBuying, true, isDark, () => setState(() { _isBuying = true; _ctrl.clear(); }))),
+              const SizedBox(width: 8),
+              Expanded(child: _tab('Sat', !_isBuying, false, isDark, () => setState(() { _isBuying = false; _ctrl.clear(); }))),
+            ]),
+            const SizedBox(height: 16),
+            if (_isBuying) ...[
+              _input(isDark, 'Tutar (₺)', prefixText: '₺ '),
+              const SizedBox(height: 8),
+              Row(children: [
+                Text(estimatedUnits > 0 ? '~${estimatedUnits.toStringAsFixed(4)} $_unit' : '',
+                    style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+                const Spacer(),
+                Text('Bakiye: ₺${tlBalance.toStringAsFixed(2)}',
+                    style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+              ]),
+              const SizedBox(height: 16),
+              _actionButton('Al', canBuy, AppColors.green600, () => _doBuy(pp)),
+            ] else ...[
+              if (currentHolding != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text(
+                    'Portföyünüzde: ${currentHolding.quantity.toStringAsFixed(4)} $_unit',
+                    style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Text('Portföyünüzde bu varlık yok',
+                      style: TextStyle(fontSize: 12,
+                          color: isDark ? Colors.white54 : AppColors.slate400)),
+                ),
+              _input(isDark, 'Miktar ($_unit)',
+                  enabled: currentHolding != null,
+                  suffix: currentHolding != null
+                      ? TextButton(
+                          onPressed: () {
+                            _ctrl.text = currentHolding.quantity.toStringAsFixed(4);
+                            setState(() {});
+                          },
+                          child: const Text('Tümü',
+                              style: TextStyle(fontSize: 12, color: AppColors.primary)))
+                      : null),
+              const SizedBox(height: 8),
+              Text(estimatedProceeds > 0 ? '~₺${estimatedProceeds.toStringAsFixed(2)} gelir' : '',
+                  style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+              const SizedBox(height: 16),
+              _actionButton('Sat', canSell, AppColors.red500, () => _doSell(pp)),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _tab(String label, bool active, bool isBuy, bool isDark, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: active
+              ? (isBuy ? AppColors.green600 : AppColors.red500)
+              : (isDark ? AppColors.slate800 : AppColors.slate100),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        alignment: Alignment.center,
+        child: Text(label,
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: active ? Colors.white : AppColors.slate400)),
+      ),
+    );
+  }
+
+  Widget _input(bool isDark, String label,
+      {String? prefixText, bool enabled = true, Widget? suffix}) {
+    return TextField(
+      controller: _ctrl,
+      enabled: enabled,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (_) => setState(() {}),
+      style: TextStyle(color: isDark ? Colors.white : AppColors.slate900),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixText: prefixText,
+        labelStyle: const TextStyle(color: AppColors.slate400, fontSize: 13),
+        suffixIcon: suffix,
+        filled: true,
+        fillColor: isDark ? AppColors.slate800 : AppColors.slate50,
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+    );
+  }
+
+  Widget _actionButton(String label, bool enabled, Color color, VoidCallback onTap) {
+    return SizedBox(
+      height: 48,
+      child: ElevatedButton(
+        onPressed: enabled ? onTap : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          disabledBackgroundColor: AppColors.slate300,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
+        child: _loading
+            ? const SizedBox(height: 18, width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            : Text(label,
+                style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+      ),
+    );
+  }
+
+  Future<void> _doBuy(PortfolioProvider pp) async {
+    final amount = double.tryParse(_ctrl.text.replaceAll(',', '.')) ?? 0;
+    if (amount <= 0) return;
+    setState(() => _loading = true);
+    final ok = await pp.buyAsset(symbol: widget.rate.symbol, amountTl: amount);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? '${widget.rate.symbol} satın alındı' : 'İşlem başarısız, tekrar deneyin'),
+      duration: const Duration(seconds: 2),
+    ));
+    if (ok) _ctrl.clear();
+  }
+
+  Future<void> _doSell(PortfolioProvider pp) async {
+    final qty = double.tryParse(_ctrl.text.replaceAll(',', '.')) ?? 0;
+    if (qty <= 0) return;
+    setState(() => _loading = true);
+    final ok = await pp.sellAsset(symbol: widget.rate.symbol, quantity: qty);
+    if (!mounted) return;
+    setState(() => _loading = false);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(ok ? '${widget.rate.symbol} satıldı' : 'İşlem başarısız, tekrar deneyin'),
+      duration: const Duration(seconds: 2),
+    ));
+    if (ok) _ctrl.clear();
+  }
 }

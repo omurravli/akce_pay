@@ -24,19 +24,35 @@ class _PortfolioScreenState extends State<PortfolioScreen> {
   }
 
   IconData _iconFor(String symbol) {
-    if (symbol.startsWith('GOLD')) return Icons.workspace_premium_rounded;
-    if (symbol.startsWith('SILVER')) return Icons.shield_moon_rounded;
-    if (symbol == 'USD') return Icons.attach_money_rounded;
-    if (symbol == 'EUR') return Icons.euro_rounded;
+    final s = symbol.toUpperCase();
+    if (s.contains('GOLD')) return Icons.workspace_premium_rounded;
+    if (s.contains('SILVER')) return Icons.shield_moon_rounded;
+    if (s.contains('USD')) return Icons.attach_money_rounded;
+    if (s.contains('EUR')) return Icons.euro_rounded;
+    if (s.contains('TRY')) return Icons.currency_lira_rounded;
+    if (s.contains('BTC') || s.contains('ETH')) return Icons.currency_bitcoin_rounded;
     return Icons.show_chart_rounded;
   }
 
   Color _colorFor(String symbol) {
-    if (symbol.startsWith('GOLD')) return const Color(0xFFD4A017);
-    if (symbol.startsWith('SILVER')) return const Color(0xFF94A3B8);
-    if (symbol == 'USD') return const Color(0xFF22C55E);
-    if (symbol == 'EUR') return const Color(0xFF3B82F6);
-    return AppColors.primary;
+    final s = symbol.toUpperCase();
+    if (s.contains('GOLD')) return const Color(0xFFD4A017); // Altın
+    if (s.contains('SILVER')) return const Color(0xFF94A3B8); // Gümüş
+    if (s.contains('USD')) return const Color(0xFF22C55E); // Yeşil
+    if (s.contains('EUR')) return const Color(0xFF3B82F6); // Mavi
+    if (s.contains('TRY')) return const Color(0xFFE11D48); // Kırmızı
+    
+    // Diğer varlıklar için sembolün karakter sayısına göre farklı renkler atayalım
+    final variedColors = [
+      const Color(0xFF8B5CF6), // Mor
+      const Color(0xFFF59E0B), // Turuncu
+      const Color(0xFF06B6D4), // Turkuaz
+      const Color(0xFFEC4899), // Pembe
+      const Color(0xFF10B981), // Zümrüt
+      const Color(0xFF6366F1), // İndigo
+    ];
+    
+    return variedColors[symbol.length % variedColors.length];
   }
 
   @override

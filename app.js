@@ -291,79 +291,8 @@ app.post('/api/transactions/send', authenticateToken, async (req, res) => {
 
 
 // ==========================================================================
-// MARKET RATES — commodities + currencies only (Twelve Data, cached 5 min)
-// ==========================================================================
-let _mktCache = null;
-let _mktCacheAt = 0;
-const MKT_TTL = 5 * 60_000;
-
-async function buildMarketRates() {
-    const now = Date.now();
-    if (_mktCache && now - _mktCacheAt < MKT_TTL) return _mktCache;
-
-    const key = process.env.TWELVE_DATA_KEY;
-    const fxData = await fetch(
-        `https://api.twelvedata.com/quote?symbol=USD/TRY,EUR/TRY,XAU/USD,XAG/USD&apikey=${key}`
-    ).then(r => r.json());
-
-    const result = [];
-    const usdTry = parseFloat(fxData['USD/TRY']?.close ?? 0);
-
-    for (const [apiSym, displaySym, name] of [
-        ['USD/TRY', 'USD',  'Dolar'],
-        ['EUR/TRY', 'EUR',  'Euro'],
-    ]) {
-        const d = fxData[apiSym];
-        if (!d?.close) continue;
-        const price = parseFloat(d.close);
-        const prev  = parseFloat(d.previous_close ?? d.close);
-        result.push({
-            symbol: displaySym, name,
-            buy_price:      +(price * 1.003).toFixed(4),
-            sell_price:     +(price * 0.997).toFixed(4),
-            change_percent: prev > 0 ? +((price - prev) / prev * 100).toFixed(3) : 0,
-            updated_at: new Date().toISOString(),
-        });
-    }
-
-    const xauUsd = parseFloat(fxData['XAU/USD']?.close ?? 0);
-    if (xauUsd > 0 && usdTry > 0) {
-        const gramTry = (xauUsd * usdTry) / 31.1035;
-        const prev    = parseFloat(fxData['XAU/USD']?.previous_close ?? xauUsd);
-        result.push({
-            symbol: 'GOLD_GR', name: 'Gram Altın',
-            buy_price:      +(gramTry * 1.01).toFixed(2),
-            sell_price:     +(gramTry * 0.99).toFixed(2),
-            change_percent: prev > 0 ? +((xauUsd - prev) / prev * 100).toFixed(3) : 0,
-            updated_at: new Date().toISOString(),
-        });
-    }
-
-    const xagUsd = parseFloat(fxData['XAG/USD']?.close ?? 0);
-    if (xagUsd > 0 && usdTry > 0) {
-        const gramTry = (xagUsd * usdTry) / 31.1035;
-        const prev    = parseFloat(fxData['XAG/USD']?.previous_close ?? xagUsd);
-        result.push({
-            symbol: 'SILVER_GR', name: 'Gram Gümüş',
-            buy_price:      +(gramTry * 1.01).toFixed(2),
-            sell_price:     +(gramTry * 0.99).toFixed(2),
-            change_percent: prev > 0 ? +((xagUsd - prev) / prev * 100).toFixed(3) : 0,
-            updated_at: new Date().toISOString(),
-        });
-    }
-
-    _mktCache = result;
-    _mktCacheAt = now;
-    return result;
-}
-
-app.get('/api/market/rates', authenticateToken, async (req, res) => {
-    try { res.json(await buildMarketRates()); }
-    catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch market rates' }); }
-});
-
-// ==========================================================================
-// STOCKS — popular list + per-user tracked (Twelve Data, cached 5 min)
+// UNIFIED MARKET CACHE — one Twelve Data call covers forex + all stocks
+// TTL: 5 min. Promise-dedup prevents concurrent refreshes.
 // ==========================================================================
 const POPULAR_SYMBOLS = {
     THYAO: 'Türk Hava Yolları',   GARAN: 'Garanti BBVA',
@@ -383,52 +312,102 @@ const POPULAR_SYMBOLS = {
     ODAS:  'Odaş Elektrik',        MGROS: 'Migros',
 };
 
-let _stockCache = {};
-let _stockCacheAt = 0;
-const STOCK_TTL = 5 * 60_000;
+const CACHE_TTL = 5 * 60_000;
+let _cache    = null;   // { market: [], stocks: {} }
+let _cacheAt  = 0;
+let _fetching = null;   // in-flight promise — deduplicates concurrent calls
 
-async function refreshStockCache() {
+async function refreshCache() {
     const now = Date.now();
-    if (now - _stockCacheAt < STOCK_TTL) return;
+    if (_cache && now - _cacheAt < CACHE_TTL) return;
+    if (_fetching) { await _fetching; return; }
 
-    const tracked = await pool.query('SELECT DISTINCT symbol FROM tracked_stocks');
-    const allSyms = [...new Set([
-        ...Object.keys(POPULAR_SYMBOLS),
-        ...tracked.rows.map(r => r.symbol),
-    ])];
+    _fetching = (async () => {
+        const key = process.env.TWELVE_DATA_KEY;
 
-    const key = process.env.TWELVE_DATA_KEY;
-    const raw = await fetch(
-        `https://api.twelvedata.com/quote?symbol=${allSyms.join(',')}&exchange=BIST&apikey=${key}`
-    ).then(r => r.json());
+        // Build symbol list: forex + BIST stocks with :BIST suffix (one call)
+        const trackedRows = await pool.query('SELECT DISTINCT symbol FROM tracked_stocks');
+        const stockSyms = [...new Set([
+            ...Object.keys(POPULAR_SYMBOLS),
+            ...trackedRows.rows.map(r => r.symbol),
+        ])];
+        const allSymbols = [
+            'USD/TRY', 'EUR/TRY', 'XAU/USD', 'XAG/USD',
+            ...stockSyms.map(s => `${s}:BIST`),
+        ];
 
-    // Twelve Data returns the object directly (not wrapped) when only 1 symbol
-    const data = allSyms.length === 1 ? { [allSyms[0]]: raw } : raw;
+        const raw = await fetch(
+            `https://api.twelvedata.com/quote?symbol=${allSymbols.join(',')}&apikey=${key}`
+        ).then(r => r.json());
 
-    const newCache = {};
-    for (const sym of allSyms) {
-        const d = data[sym];
-        if (!d?.close) continue;
-        const price = parseFloat(d.close);
-        const prev  = parseFloat(d.previous_close ?? d.close);
-        newCache[sym] = {
-            symbol: sym,
-            name: POPULAR_SYMBOLS[sym] || d.name || sym,
-            buy_price:      +(price * 1.001).toFixed(2),
-            sell_price:     +(price * 0.999).toFixed(2),
-            change_percent: prev > 0 ? +((price - prev) / prev * 100).toFixed(3) : 0,
-            updated_at: new Date().toISOString(),
-        };
-    }
-    _stockCache = newCache;
-    _stockCacheAt = now;
+        const usdTry = parseFloat(raw['USD/TRY']?.close ?? 0);
+        const updatedAt = new Date().toISOString();
+        const market = [];
+
+        // Currencies
+        for (const [k, sym, name] of [['USD/TRY','USD','Dolar'],['EUR/TRY','EUR','Euro']]) {
+            const d = raw[k]; if (!d?.close) continue;
+            const price = parseFloat(d.close), prev = parseFloat(d.previous_close ?? d.close);
+            market.push({ symbol: sym, name,
+                buy_price:  +(price * 1.003).toFixed(4),
+                sell_price: +(price * 0.997).toFixed(4),
+                change_percent: prev > 0 ? +((price-prev)/prev*100).toFixed(3) : 0,
+                updated_at: updatedAt });
+        }
+        // Gold
+        const xauUsd = parseFloat(raw['XAU/USD']?.close ?? 0);
+        if (xauUsd > 0 && usdTry > 0) {
+            const g = (xauUsd * usdTry) / 31.1035, prev = parseFloat(raw['XAU/USD']?.previous_close ?? xauUsd);
+            market.push({ symbol: 'GOLD_GR', name: 'Gram Altın',
+                buy_price: +(g*1.01).toFixed(2), sell_price: +(g*0.99).toFixed(2),
+                change_percent: prev > 0 ? +((xauUsd-prev)/prev*100).toFixed(3) : 0,
+                updated_at: updatedAt });
+        }
+        // Silver
+        const xagUsd = parseFloat(raw['XAG/USD']?.close ?? 0);
+        if (xagUsd > 0 && usdTry > 0) {
+            const g = (xagUsd * usdTry) / 31.1035, prev = parseFloat(raw['XAG/USD']?.previous_close ?? xagUsd);
+            market.push({ symbol: 'SILVER_GR', name: 'Gram Gümüş',
+                buy_price: +(g*1.01).toFixed(2), sell_price: +(g*0.99).toFixed(2),
+                change_percent: prev > 0 ? +((xagUsd-prev)/prev*100).toFixed(3) : 0,
+                updated_at: updatedAt });
+        }
+
+        // Stocks — response key is "THYAO:BIST"
+        const stocks = {};
+        for (const sym of stockSyms) {
+            const d = raw[`${sym}:BIST`];
+            if (!d?.close) continue;
+            const price = parseFloat(d.close), prev = parseFloat(d.previous_close ?? d.close);
+            stocks[sym] = { symbol: sym,
+                name: POPULAR_SYMBOLS[sym] || d.name || sym,
+                buy_price:  +(price * 1.001).toFixed(2),
+                sell_price: +(price * 0.999).toFixed(2),
+                change_percent: prev > 0 ? +((price-prev)/prev*100).toFixed(3) : 0,
+                updated_at: updatedAt };
+        }
+
+        _cache   = { market, stocks };
+        _cacheAt = Date.now();
+    })().finally(() => { _fetching = null; });
+
+    await _fetching;
 }
+
+// Convenience getters
+async function getMarketRates()  { await refreshCache(); return _cache?.market ?? []; }
+async function getStockCache()   { await refreshCache(); return _cache?.stocks ?? {}; }
+
+app.get('/api/market/rates', authenticateToken, async (req, res) => {
+    try { res.json(await getMarketRates()); }
+    catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch market rates' }); }
+});
 
 // GET /api/stocks/popular
 app.get('/api/stocks/popular', authenticateToken, async (req, res) => {
     try {
-        await refreshStockCache();
-        res.json(Object.keys(POPULAR_SYMBOLS).map(s => _stockCache[s]).filter(Boolean));
+        const stocks = await getStockCache();
+        res.json(Object.keys(POPULAR_SYMBOLS).map(s => stocks[s]).filter(Boolean));
     } catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch popular stocks' }); }
 });
 
@@ -436,12 +415,12 @@ app.get('/api/stocks/popular', authenticateToken, async (req, res) => {
 app.get('/api/stocks/tracked', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     try {
-        await refreshStockCache();
+        const stocks = await getStockCache();
         const { rows } = await pool.query(
             'SELECT symbol, name FROM tracked_stocks WHERE user_id = $1 ORDER BY added_at',
             [userId]
         );
-        res.json(rows.map(r => _stockCache[r.symbol] ?? { symbol: r.symbol, name: r.name }).filter(s => s.buy_price));
+        res.json(rows.map(r => stocks[r.symbol] ?? { symbol: r.symbol, name: r.name }).filter(s => s.buy_price));
     } catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch tracked stocks' }); }
 });
 
@@ -455,7 +434,6 @@ app.post('/api/stocks/track', authenticateToken, async (req, res) => {
             'INSERT INTO tracked_stocks (user_id, symbol, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
             [userId, symbol.toUpperCase(), name || symbol]
         );
-        _stockCacheAt = 0; // force refresh so new symbol is priced
         res.json({ success: true });
     } catch (err) { console.error(err); res.status(500).json({ error: 'Could not track stock' }); }
 });

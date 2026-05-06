@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="logo.png" alt="AkçePay Logo" width="200"/>
+  <img src="akce_logo.jpeg" alt="AkçePay Logo" width="200"/>
   <h1>🪙 AkçePay</h1>
   <p><b>Finans ve Yatırım Dünyasına Risksiz Adım Atın! / Step into the World of Finance Risk-Free!</b></p>
   

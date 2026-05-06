@@ -304,6 +304,42 @@ class ApiService {
     return await http.get(url, headers: _getHeaders(token));
   }
 
+  Future<http.Response> adminIssueBill({
+    required String userId,
+    required String category,
+    required double amount,
+    String? description,
+    String? dueDate,
+  }) async {
+    final token = await getToken();
+    return await http.post(
+      Uri.parse('$baseUrl/api/admin/users/$userId/bills'),
+      headers: _getHeaders(token),
+      body: jsonEncode({
+        'category': category,
+        'amount': amount,
+        if (description != null) 'description': description,
+        if (dueDate != null) 'due_date': dueDate,
+      }),
+    );
+  }
+
+  Future<http.Response> adminChargePayment({
+    required String userId,
+    required double amount,
+    String? description,
+  }) async {
+    final token = await getToken();
+    return await http.post(
+      Uri.parse('$baseUrl/api/admin/users/$userId/charge'),
+      headers: _getHeaders(token),
+      body: jsonEncode({
+        'amount': amount,
+        if (description != null) 'description': description,
+      }),
+    );
+  }
+
   Future<http.Response> getAdminUserTransactions(String userId) async {
     final token = await getToken();
     final url = Uri.parse('$baseUrl/api/admin/users/$userId/transactions');

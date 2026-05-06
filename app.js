@@ -21,6 +21,18 @@ const pool = new Pool({
 // Schema migrations (safe to run every startup)
 pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'user'`).catch(console.error);
 pool.query(`
+    CREATE TABLE IF NOT EXISTS bills (
+        id          SERIAL PRIMARY KEY,
+        user_id     UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        category    VARCHAR(50)   NOT NULL,
+        amount      DECIMAL(12,2) NOT NULL,
+        description VARCHAR(255),
+        due_date    DATE          NOT NULL,
+        status      VARCHAR(20)   NOT NULL DEFAULT 'pending',
+        created_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+    )
+`).catch(console.error);
+pool.query(`
     CREATE TABLE IF NOT EXISTS holdings (
         id           SERIAL PRIMARY KEY,
         user_id      UUID          NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -650,6 +662,81 @@ app.patch('/api/admin/users/:id', authenticateToken, async (req, res) => {
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Update failed' });
+    }
+});
+
+// ==========================================================================
+// ADMIN — BILL ISSUING & CARD PAYMENT CHARGES
+// ==========================================================================
+
+async function requireAdmin(req, res) {
+    const { rows } = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.userId]);
+    if (!rows.length || rows[0].role !== 'admin') {
+        res.status(403).json({ error: 'Yetkisiz erişim' });
+        return false;
+    }
+    return true;
+}
+
+// POST /api/admin/users/:id/bills
+app.post('/api/admin/users/:id/bills', authenticateToken, async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const { category, amount, description, due_date } = req.body;
+    const userId = req.params.id;
+    if (!category || !amount || amount <= 0)
+        return res.status(400).json({ error: 'category ve amount zorunlu' });
+    const dueDate = due_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    try {
+        await pool.query(
+            'INSERT INTO bills (user_id, category, amount, description, due_date) VALUES ($1, $2, $3, $4, $5)',
+            [userId, category, amount, description || null, dueDate]
+        );
+        res.json({ success: true });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Fatura gönderilemedi' });
+    }
+});
+
+// POST /api/admin/users/:id/charge  — deduct from wallet, log to transactions
+app.post('/api/admin/users/:id/charge', authenticateToken, async (req, res) => {
+    if (!await requireAdmin(req, res)) return;
+    const { amount, description } = req.body;
+    const userId = req.params.id;
+    if (!amount || amount <= 0)
+        return res.status(400).json({ error: 'amount zorunlu' });
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const walletRes = await client.query(
+            `SELECT wallet_id, balance FROM wallets WHERE owner_id = $1 AND wallet_type = 'TL' FOR UPDATE`,
+            [userId]
+        );
+        if (!walletRes.rows.length) throw new Error('Cüzdan bulunamadı');
+        const { wallet_id, balance } = walletRes.rows[0];
+        if (parseFloat(balance) < amount) throw new Error('Yetersiz bakiye');
+
+        await client.query('UPDATE wallets SET balance = balance - $1 WHERE wallet_id = $2', [amount, wallet_id]);
+        await client.query(
+            `INSERT INTO transactions (sender_id, sender_wallet_id, amount, description, type, status)
+             VALUES ($1, $2, $3, $4, 'CARD_PAYMENT', 'SUCCESS')`,
+            [userId, wallet_id, amount, description || 'Kart harcaması']
+        );
+        await client.query('COMMIT');
+
+        pool.query(
+            `INSERT INTO activities (owner_id, type, description) VALUES ($1, 'CARD_PAYMENT', $2)`,
+            [userId, description || 'Kart harcaması']
+        ).catch(() => {});
+
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
     }
 });
 

@@ -337,6 +337,17 @@ class AdminUserDetailScreen extends StatefulWidget {
   State<AdminUserDetailScreen> createState() => _AdminUserDetailScreenState();
 }
 
+const _billCategories = [
+  ('Elektrik',  Icons.bolt_rounded),
+  ('Doğalgaz',  Icons.local_fire_department_rounded),
+  ('Su',        Icons.water_drop_rounded),
+  ('İnternet',  Icons.wifi_rounded),
+  ('Telefon',   Icons.phone_rounded),
+  ('Kira',      Icons.home_rounded),
+  ('Sigorta',   Icons.shield_rounded),
+  ('Diğer',     Icons.receipt_long_rounded),
+];
+
 class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
   List<AppTransaction> _transactions = [];
   bool _isLoading = true;
@@ -445,6 +456,22 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: _actionBtn(
+                  isDark, 'Fatura Gönder', Icons.receipt_long_rounded,
+                  const Color(0xFF0891B2), () => _showBillSheet(isDark),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _actionBtn(
+                  isDark, 'Ödeme Al', Icons.credit_card_rounded,
+                  AppColors.orange600, () => _showChargeSheet(isDark),
+                ),
+              ),
+            ]),
             const SizedBox(height: 20),
             Text('İşlem Geçmişi',
                 style: TextStyle(
@@ -563,12 +590,239 @@ class _AdminUserDetailScreenState extends State<AdminUserDetailScreen> {
     return Column(
       children: [
         Text(value,
-            style: TextStyle(
-                fontWeight: FontWeight.bold, fontSize: 14, color: color)),
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: color)),
         const SizedBox(height: 2),
-        Text(label,
-            style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
+        Text(label, style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
       ],
+    );
+  }
+
+  Widget _actionBtn(bool isDark, String label, IconData icon, Color color, VoidCallback onTap) {
+    return Material(
+      color: color.withValues(alpha: isDark ? 0.18 : 0.1),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(width: 6),
+              Text(label, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: color)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showBillSheet(bool isDark) {
+    String selectedCategory = _billCategories[0].$1;
+    final amountCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    bool loading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.cardDark : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(child: Container(width: 40, height: 4,
+                  decoration: BoxDecoration(color: AppColors.slate300, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              Text('Fatura Gönder',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : AppColors.slate900)),
+              const SizedBox(height: 4),
+              Text(widget.user.username,
+                  style: const TextStyle(fontSize: 13, color: AppColors.slate400)),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 80,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _billCategories.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final (name, icon) = _billCategories[i];
+                    final active = selectedCategory == name;
+                    return GestureDetector(
+                      onTap: () => setSheet(() => selectedCategory = name),
+                      child: Container(
+                        width: 72,
+                        decoration: BoxDecoration(
+                          color: active
+                              ? const Color(0xFF0891B2).withValues(alpha: 0.15)
+                              : (isDark ? AppColors.slate800 : AppColors.slate50),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: active ? const Color(0xFF0891B2) : Colors.transparent,
+                              width: 1.5),
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(icon, size: 20,
+                                color: active ? const Color(0xFF0891B2) : AppColors.slate400),
+                            const SizedBox(height: 4),
+                            Text(name, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
+                                color: active ? const Color(0xFF0891B2) : AppColors.slate400)),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 14),
+              _sheetField(isDark, amountCtrl, 'Tutar (₺)', prefixText: '₺ ', numeric: true),
+              const SizedBox(height: 10),
+              _sheetField(isDark, descCtrl, 'Açıklama (isteğe bağlı)'),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: loading ? null : () async {
+                    final amount = double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0;
+                    if (amount <= 0) return;
+                    setSheet(() => loading = true);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final res = await ApiService().adminIssueBill(
+                      userId: widget.user.id,
+                      category: selectedCategory,
+                      amount: amount,
+                      description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                    );
+                    if (!mounted) return;
+                    setSheet(() => loading = false);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(res.statusCode == 200
+                          ? '${widget.user.username} kullanıcısına $selectedCategory faturası gönderildi'
+                          : 'Hata: ${jsonDecode(res.body)['error']}'),
+                      duration: const Duration(seconds: 3),
+                    ));
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0891B2),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: loading
+                      ? const SizedBox(height: 18, width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Gönder',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showChargeSheet(bool isDark) {
+    final amountCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    bool loading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.cardDark : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(child: Container(width: 40, height: 4,
+                  decoration: BoxDecoration(color: AppColors.slate300, borderRadius: BorderRadius.circular(2)))),
+              const SizedBox(height: 16),
+              Text('Ödeme Al',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : AppColors.slate900)),
+              const SizedBox(height: 4),
+              Text('${widget.user.username} · Mevcut bakiye: ₺${widget.user.totalBalance.toStringAsFixed(2)}',
+                  style: const TextStyle(fontSize: 13, color: AppColors.slate400)),
+              const SizedBox(height: 16),
+              _sheetField(isDark, amountCtrl, 'Tutar (₺)', prefixText: '₺ ', numeric: true),
+              const SizedBox(height: 10),
+              _sheetField(isDark, descCtrl, 'Açıklama (kart harcaması)'),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: loading ? null : () async {
+                    final amount = double.tryParse(amountCtrl.text.replaceAll(',', '.')) ?? 0;
+                    if (amount <= 0) return;
+                    setSheet(() => loading = true);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final res = await ApiService().adminChargePayment(
+                      userId: widget.user.id,
+                      amount: amount,
+                      description: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                    );
+                    if (!mounted) return;
+                    setSheet(() => loading = false);
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    messenger.showSnackBar(SnackBar(
+                      content: Text(res.statusCode == 200
+                          ? '₺${amount.toStringAsFixed(2)} tahsil edildi'
+                          : 'Hata: ${jsonDecode(res.body)['error']}'),
+                      duration: const Duration(seconds: 3),
+                    ));
+                    if (res.statusCode == 200) _fetchTransactions();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.orange600,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 0,
+                  ),
+                  child: loading
+                      ? const SizedBox(height: 18, width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Tahsil Et',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sheetField(bool isDark, TextEditingController ctrl, String label,
+      {String? prefixText, bool numeric = false}) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: numeric ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+      style: TextStyle(color: isDark ? Colors.white : AppColors.slate900),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixText: prefixText,
+        labelStyle: const TextStyle(color: AppColors.slate400, fontSize: 13),
+        filled: true,
+        fillColor: isDark ? AppColors.slate800 : AppColors.slate50,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
     );
   }
 }

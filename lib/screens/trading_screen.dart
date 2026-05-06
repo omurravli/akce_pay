@@ -211,7 +211,13 @@ class _TradingScreenState extends State<TradingScreen>
       itemBuilder: (context, i) {
         final r = sp.searchResults[i];
         final tracked = sp.isTracked(r.symbol);
-        return Container(
+        final popularRate = sp.popular.where((p) => p.symbol == r.symbol).isNotEmpty
+            ? sp.popular.firstWhere((p) => p.symbol == r.symbol)
+            : null;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: popularRate != null ? () => _showStockDetail(popularRate, sp) : null,
+          child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
@@ -275,6 +281,7 @@ class _TradingScreenState extends State<TradingScreen>
               ),
             ],
           ),
+          ),
         );
       },
     );
@@ -284,6 +291,7 @@ class _TradingScreenState extends State<TradingScreen>
     final tracked = sp.isTracked(r.symbol);
     final color = _colorFor(r.symbol);
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _showStockDetail(r, sp),
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),

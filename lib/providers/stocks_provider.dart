@@ -83,8 +83,9 @@ class StocksProvider with ChangeNotifier {
     try {
       final res = await _api.trackStock(symbol: symbol, name: name);
       if (res.statusCode == 200) {
-        _trackedSymbols.add(symbol);
         await _fetchTracked();
+        // ensure symbol is marked even if the fetch returned no price data yet
+        _trackedSymbols.add(symbol);
         notifyListeners();
         return true;
       }

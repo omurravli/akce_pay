@@ -141,7 +141,7 @@ class _TradingScreenState extends State<TradingScreen>
             Expanded(
               child: _searchController.text.isNotEmpty
                   ? _buildSearchResults(isDark, sp)
-                  : _buildStocksList(isDark, sp),
+                  : _buildStocksList(isDark, sp, context),
             ),
           ],
         );
@@ -177,7 +177,7 @@ class _TradingScreenState extends State<TradingScreen>
     );
   }
 
-  Widget _buildStocksList(bool isDark, StocksProvider sp) {
+  Widget _buildStocksList(bool isDark, StocksProvider sp, BuildContext listCtx) {
     if (sp.isLoading && sp.popular.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -188,11 +188,11 @@ class _TradingScreenState extends State<TradingScreen>
         children: [
           if (sp.tracked.isNotEmpty) ...[
             _sectionHeader('Takip Listesi', isDark),
-            ...sp.tracked.map((s) => _buildStockTile(isDark, s, sp)),
+            ...sp.tracked.map((s) => _buildStockTile(isDark, s, sp, listCtx)),
             const SizedBox(height: 8),
           ],
           _sectionHeader('Popüler Hisseler (BIST)', isDark),
-          ...sp.popular.map((s) => _buildStockTile(isDark, s, sp)),
+          ...sp.popular.map((s) => _buildStockTile(isDark, s, sp, listCtx)),
         ],
       ),
     );
@@ -216,7 +216,7 @@ class _TradingScreenState extends State<TradingScreen>
             : null;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: popularRate != null ? () => _showStockDetail(popularRate, sp) : null,
+          onTap: popularRate != null ? () => _showStockDetail(context, popularRate) : null,
           child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -287,75 +287,81 @@ class _TradingScreenState extends State<TradingScreen>
     );
   }
 
-  Widget _buildStockTile(bool isDark, MarketRate r, StocksProvider sp) {
+  Widget _buildStockTile(bool isDark, MarketRate r, StocksProvider sp, BuildContext tileCtx) {
     final tracked = sp.isTracked(r.symbol);
     final color = _colorFor(r.symbol);
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _showStockDetail(r, sp),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.cardDark : Colors.white,
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.cardDark : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40, height: 40,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: isDark ? 0.2 : 0.12),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(_iconFor(r.symbol), color: color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(r.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14,
-                      color: isDark ? Colors.white : AppColors.slate900)),
-                  Text(r.symbol, style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
-                ],
-              ),
-            ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          onTap: () => _showStockDetail(tileCtx, r),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
               children: [
-                Text('₺${r.sellPrice.toStringAsFixed(2)}',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
-                        color: isDark ? Colors.white : AppColors.slate900)),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  width: 40, height: 40,
                   decoration: BoxDecoration(
-                    color: (r.isUp ? AppColors.green500 : AppColors.red500).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(6),
+                    color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                    shape: BoxShape.circle,
                   ),
-                  child: Text(
-                    '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold,
-                        color: r.isUp ? AppColors.green600 : AppColors.red500),
+                  child: Icon(_iconFor(r.symbol), color: color, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(r.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14,
+                          color: isDark ? Colors.white : AppColors.slate900)),
+                      Text(r.symbol, style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text('₺${r.sellPrice.toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
+                            color: isDark ? Colors.white : AppColors.slate900)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: (r.isUp ? AppColors.green500 : AppColors.red500).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold,
+                            color: r.isUp ? AppColors.green600 : AppColors.red500),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _toggleTrack(r, sp),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      tracked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                      color: tracked ? AppColors.primary : AppColors.slate400,
+                      size: 22,
+                    ),
                   ),
                 ),
               ],
             ),
-            const SizedBox(width: 10),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => _toggleTrack(r, sp),
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(
-                  tracked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
-                  color: tracked ? AppColors.primary : AppColors.slate400,
-                  size: 22,
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -377,11 +383,11 @@ class _TradingScreenState extends State<TradingScreen>
     }
   }
 
-  void _showStockDetail(MarketRate r, StocksProvider sp) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  void _showStockDetail(BuildContext ctx, MarketRate r) {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
     final color = _colorFor(r.symbol);
     showModalBottomSheet(
-      context: context,
+      context: ctx,
       backgroundColor: isDark ? AppColors.cardDark : Colors.white,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),

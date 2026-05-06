@@ -452,6 +452,7 @@ app.post('/api/stocks/track', authenticateToken, async (req, res) => {
             'INSERT INTO tracked_stocks (user_id, symbol, name) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
             [userId, symbol.toUpperCase(), name || symbol]
         );
+        _cacheAt = 0; // bust cache so next /tracked call fetches price for newly tracked symbol
         res.json({ success: true });
     } catch (err) { console.error(err); res.status(500).json({ error: 'Could not track stock' }); }
 });

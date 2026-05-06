@@ -333,7 +333,19 @@ const POPULAR_SYMBOLS = {
 const CACHE_TTL = 5 * 60_000;
 let _cache    = null;   // { market: [], stocks: {} }
 let _cacheAt  = 0;
-let _fetching = null;   // in-flight promise — deduplicates concurrent calls
+let _fetching = null;   // deduplicates concurrent refreshes
+
+async function yahooQuote(symbol) {
+    try {
+        const res = await fetch(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`,
+            { headers: { 'User-Agent': 'Mozilla/5.0' } }
+        );
+        const meta = (await res.json())?.chart?.result?.[0]?.meta;
+        if (!meta?.regularMarketPrice) return null;
+        return { price: meta.regularMarketPrice, prev: meta.chartPreviousClose || meta.regularMarketPrice };
+    } catch { return null; }
+}
 
 async function refreshCache() {
     const now = Date.now();
@@ -341,69 +353,65 @@ async function refreshCache() {
     if (_fetching) { await _fetching; return; }
 
     _fetching = (async () => {
-        const key = process.env.TWELVE_DATA_KEY;
-
-        // Build symbol list: forex + BIST stocks with :BIST suffix (one call)
         const trackedRows = await pool.query('SELECT DISTINCT symbol FROM tracked_stocks');
         const stockSyms = [...new Set([
             ...Object.keys(POPULAR_SYMBOLS),
             ...trackedRows.rows.map(r => r.symbol),
         ])];
-        const allSymbols = [
-            'USD/TRY', 'EUR/TRY', 'XAU/USD', 'XAG/USD',
-            ...stockSyms.map(s => `${s}:BIST`),
-        ];
 
-        const raw = await fetch(
-            `https://api.twelvedata.com/quote?symbol=${allSymbols.join(',')}&apikey=${key}`
-        ).then(r => r.json());
+        // Fetch everything in parallel — no API key, no rate limits
+        const [usdQ, eurQ, goldQ, silverQ, ...stockQuotes] = await Promise.all([
+            yahooQuote('USDTRY=X'),
+            yahooQuote('EURTRY=X'),
+            yahooQuote('GC=F'),
+            yahooQuote('SI=F'),
+            ...stockSyms.map(s => yahooQuote(`${s}.IS`)),
+        ]);
 
-        const usdTry = parseFloat(raw['USD/TRY']?.close ?? 0);
         const updatedAt = new Date().toISOString();
         const market = [];
 
-        // Currencies
-        for (const [k, sym, name] of [['USD/TRY','USD','Dolar'],['EUR/TRY','EUR','Euro']]) {
-            const d = raw[k]; if (!d?.close) continue;
-            const price = parseFloat(d.close), prev = parseFloat(d.previous_close ?? d.close);
-            market.push({ symbol: sym, name,
-                buy_price:  +(price * 1.003).toFixed(4),
-                sell_price: +(price * 0.997).toFixed(4),
-                change_percent: prev > 0 ? +((price-prev)/prev*100).toFixed(3) : 0,
-                updated_at: updatedAt });
-        }
-        // Gold
-        const xauUsd = parseFloat(raw['XAU/USD']?.close ?? 0);
-        if (xauUsd > 0 && usdTry > 0) {
-            const g = (xauUsd * usdTry) / 31.1035, prev = parseFloat(raw['XAU/USD']?.previous_close ?? xauUsd);
+        if (usdQ) market.push({ symbol: 'USD', name: 'Dolar',
+            buy_price:  +(usdQ.price * 1.003).toFixed(4),
+            sell_price: +(usdQ.price * 0.997).toFixed(4),
+            change_percent: +((usdQ.price - usdQ.prev) / usdQ.prev * 100).toFixed(3),
+            updated_at: updatedAt });
+
+        if (eurQ) market.push({ symbol: 'EUR', name: 'Euro',
+            buy_price:  +(eurQ.price * 1.003).toFixed(4),
+            sell_price: +(eurQ.price * 0.997).toFixed(4),
+            change_percent: +((eurQ.price - eurQ.prev) / eurQ.prev * 100).toFixed(3),
+            updated_at: updatedAt });
+
+        const usdTry = usdQ?.price ?? 0;
+        if (goldQ && usdTry > 0) {
+            const g = goldQ.price * usdTry / 31.1035;
             market.push({ symbol: 'GOLD_GR', name: 'Gram Altın',
-                buy_price: +(g*1.01).toFixed(2), sell_price: +(g*0.99).toFixed(2),
-                change_percent: prev > 0 ? +((xauUsd-prev)/prev*100).toFixed(3) : 0,
+                buy_price:  +(g * 1.01).toFixed(2),
+                sell_price: +(g * 0.99).toFixed(2),
+                change_percent: +((goldQ.price - goldQ.prev) / goldQ.prev * 100).toFixed(3),
                 updated_at: updatedAt });
         }
-        // Silver
-        const xagUsd = parseFloat(raw['XAG/USD']?.close ?? 0);
-        if (xagUsd > 0 && usdTry > 0) {
-            const g = (xagUsd * usdTry) / 31.1035, prev = parseFloat(raw['XAG/USD']?.previous_close ?? xagUsd);
+        if (silverQ && usdTry > 0) {
+            const g = silverQ.price * usdTry / 31.1035;
             market.push({ symbol: 'SILVER_GR', name: 'Gram Gümüş',
-                buy_price: +(g*1.01).toFixed(2), sell_price: +(g*0.99).toFixed(2),
-                change_percent: prev > 0 ? +((xagUsd-prev)/prev*100).toFixed(3) : 0,
+                buy_price:  +(g * 1.01).toFixed(2),
+                sell_price: +(g * 0.99).toFixed(2),
+                change_percent: +((silverQ.price - silverQ.prev) / silverQ.prev * 100).toFixed(3),
                 updated_at: updatedAt });
         }
 
-        // Stocks — response key is "THYAO:BIST"
         const stocks = {};
-        for (const sym of stockSyms) {
-            const d = raw[`${sym}:BIST`];
-            if (!d?.close) continue;
-            const price = parseFloat(d.close), prev = parseFloat(d.previous_close ?? d.close);
+        stockSyms.forEach((sym, i) => {
+            const q = stockQuotes[i];
+            if (!q) return;
             stocks[sym] = { symbol: sym,
-                name: POPULAR_SYMBOLS[sym] || d.name || sym,
-                buy_price:  +(price * 1.001).toFixed(2),
-                sell_price: +(price * 0.999).toFixed(2),
-                change_percent: prev > 0 ? +((price-prev)/prev*100).toFixed(3) : 0,
+                name: POPULAR_SYMBOLS[sym] || sym,
+                buy_price:  +(q.price * 1.001).toFixed(2),
+                sell_price: +(q.price * 0.999).toFixed(2),
+                change_percent: +((q.price - q.prev) / q.prev * 100).toFixed(3),
                 updated_at: updatedAt };
-        }
+        });
 
         _cache   = { market, stocks };
         _cacheAt = Date.now();
@@ -425,7 +433,10 @@ app.get('/api/market/rates', authenticateToken, async (req, res) => {
 app.get('/api/stocks/popular', authenticateToken, async (req, res) => {
     try {
         const stocks = await getStockCache();
-        res.json(Object.keys(POPULAR_SYMBOLS).map(s => stocks[s]).filter(Boolean));
+        const now = new Date().toISOString();
+        res.json(Object.entries(POPULAR_SYMBOLS).map(([sym, name]) =>
+            stocks[sym] ?? { symbol: sym, name, buy_price: 0, sell_price: 0, change_percent: 0, updated_at: now }
+        ));
     } catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch popular stocks' }); }
 });
 
@@ -438,7 +449,10 @@ app.get('/api/stocks/tracked', authenticateToken, async (req, res) => {
             'SELECT symbol, name FROM tracked_stocks WHERE user_id = $1 ORDER BY added_at',
             [userId]
         );
-        res.json(rows.map(r => stocks[r.symbol] ?? { symbol: r.symbol, name: r.name }).filter(s => s.buy_price));
+        const now = new Date().toISOString();
+        res.json(rows.map(r =>
+            stocks[r.symbol] ?? { symbol: r.symbol, name: r.name, buy_price: 0, sell_price: 0, change_percent: 0, updated_at: now }
+        ));
     } catch (err) { console.error(err); res.status(500).json({ error: 'Could not fetch tracked stocks' }); }
 });
 

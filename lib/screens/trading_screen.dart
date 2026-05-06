@@ -214,9 +214,13 @@ class _TradingScreenState extends State<TradingScreen>
         final popularRate = sp.popular.where((p) => p.symbol == r.symbol).isNotEmpty
             ? sp.popular.firstWhere((p) => p.symbol == r.symbol)
             : null;
+        final detailRate = popularRate ?? MarketRate(
+          symbol: r.symbol, name: r.name,
+          buyPrice: 0, sellPrice: 0, changePercent: 0, updatedAt: DateTime.now(),
+        );
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: popularRate != null ? () => _showStockDetail(context, popularRate) : null,
+          onTap: () => _showStockDetail(context, detailRate),
           child: Container(
           margin: const EdgeInsets.only(bottom: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -329,9 +333,10 @@ class _TradingScreenState extends State<TradingScreen>
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text('₺${r.sellPrice.toStringAsFixed(2)}',
+                    Text(r.sellPrice > 0 ? '₺${r.sellPrice.toStringAsFixed(2)}' : '—',
                         style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
                             color: isDark ? Colors.white : AppColors.slate900)),
+                    if (r.sellPrice > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
@@ -475,19 +480,19 @@ class _TradingScreenState extends State<TradingScreen>
                       Row(
                         children: [
                           Expanded(child: _detailCell(isDark, 'Son Fiyat',
-                              '₺${r.sellPrice.toStringAsFixed(2)}')),
+                              r.sellPrice > 0 ? '₺${r.sellPrice.toStringAsFixed(2)}' : '—')),
                           const SizedBox(width: 10),
                           Expanded(child: _detailCell(isDark, 'Değişim',
-                              '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
-                              valueColor: r.isUp ? AppColors.green600 : AppColors.red500)),
+                              r.sellPrice > 0 ? '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%' : '—',
+                              valueColor: r.sellPrice > 0 ? (r.isUp ? AppColors.green600 : AppColors.red500) : null)),
                         ],
                       ),
                       const SizedBox(height: 10),
                       Row(
                         children: [
-                          Expanded(child: _detailCell(isDark, 'Alış', '₺${r.buyPrice.toStringAsFixed(2)}')),
+                          Expanded(child: _detailCell(isDark, 'Alış', r.buyPrice > 0 ? '₺${r.buyPrice.toStringAsFixed(2)}' : '—')),
                           const SizedBox(width: 10),
-                          Expanded(child: _detailCell(isDark, 'Satış', '₺${r.sellPrice.toStringAsFixed(2)}')),
+                          Expanded(child: _detailCell(isDark, 'Satış', r.sellPrice > 0 ? '₺${r.sellPrice.toStringAsFixed(2)}' : '—')),
                         ],
                       ),
                       const SizedBox(height: 10),

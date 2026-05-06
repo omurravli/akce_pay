@@ -246,7 +246,19 @@ class _TradingScreenState extends State<TradingScreen>
                 ),
               ),
               GestureDetector(
-                onTap: () => tracked ? sp.untrackStock(r.symbol) : sp.trackStock(r.symbol, r.name),
+                onTap: () async {
+                  final ok = tracked
+                      ? await sp.untrackStock(r.symbol)
+                      : await sp.trackStock(r.symbol, r.name);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(ok
+                          ? (tracked ? '${r.symbol} takipten çıkarıldı' : '${r.symbol} takip listesine eklendi')
+                          : 'İşlem başarısız, tekrar deneyin'),
+                      duration: const Duration(seconds: 2),
+                    ));
+                  }
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
@@ -269,64 +281,226 @@ class _TradingScreenState extends State<TradingScreen>
 
   Widget _buildStockTile(bool isDark, MarketRate r, StocksProvider sp) {
     final tracked = sp.isTracked(r.symbol);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.cardDark : Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: _colorFor(r.symbol).withValues(alpha: isDark ? 0.2 : 0.12),
-              shape: BoxShape.circle,
+    final color = _colorFor(r.symbol);
+    return GestureDetector(
+      onTap: () => _showStockDetail(r, sp),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.cardDark : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(_iconFor(r.symbol), color: color, size: 20),
             ),
-            child: Icon(_iconFor(r.symbol), color: _colorFor(r.symbol), size: 20),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(r.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14,
+                      color: isDark ? Colors.white : AppColors.slate900)),
+                  Text(r.symbol, style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(r.name, style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14,
-                    color: isDark ? Colors.white : AppColors.slate900)),
-                Text(r.symbol, style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
+                Text('₺${r.sellPrice.toStringAsFixed(2)}',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
+                        color: isDark ? Colors.white : AppColors.slate900)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (r.isUp ? AppColors.green500 : AppColors.red500).withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold,
+                        color: r.isUp ? AppColors.green600 : AppColors.red500),
+                  ),
+                ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text('₺${r.sellPrice.toStringAsFixed(2)}',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14,
-                      color: isDark ? Colors.white : AppColors.slate900)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: (r.isUp ? AppColors.green500 : AppColors.red500).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold,
-                      color: r.isUp ? AppColors.green600 : AppColors.red500),
+            const SizedBox(width: 10),
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => _toggleTrack(r, sp),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  tracked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
+                  color: tracked ? AppColors.primary : AppColors.slate400,
+                  size: 22,
                 ),
               ),
-            ],
-          ),
-          const SizedBox(width: 10),
-          GestureDetector(
-            onTap: () => tracked ? sp.untrackStock(r.symbol) : sp.trackStock(r.symbol, r.name),
-            child: Icon(
-              tracked ? Icons.bookmark_rounded : Icons.bookmark_outline_rounded,
-              color: tracked ? AppColors.primary : AppColors.slate400,
-              size: 22,
             ),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleTrack(MarketRate r, StocksProvider sp) async {
+    final tracked = sp.isTracked(r.symbol);
+    final ok = tracked
+        ? await sp.untrackStock(r.symbol)
+        : await sp.trackStock(r.symbol, r.name);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(ok
+            ? (tracked ? '${r.symbol} takipten çıkarıldı' : '${r.symbol} takip listesine eklendi')
+            : 'İşlem başarısız, tekrar deneyin'),
+        duration: const Duration(seconds: 2),
+      ));
+    }
+  }
+
+  void _showStockDetail(MarketRate r, StocksProvider sp) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final color = _colorFor(r.symbol);
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppColors.cardDark : Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Consumer<StocksProvider>(
+              builder: (ctx, sp2, _) {
+                final tracked = sp2.isTracked(r.symbol);
+                return Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 40, height: 4,
+                          decoration: BoxDecoration(color: AppColors.slate300,
+                              borderRadius: BorderRadius.circular(2))),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Container(
+                            width: 52, height: 52,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(_iconFor(r.symbol), color: color, size: 26),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(r.name, style: TextStyle(fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : AppColors.slate900)),
+                                Text('${r.symbol} · Borsa İstanbul',
+                                    style: const TextStyle(fontSize: 12, color: AppColors.slate400)),
+                              ],
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () async {
+                              final ok = tracked
+                                  ? await sp2.untrackStock(r.symbol)
+                                  : await sp2.trackStock(r.symbol, r.name);
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text(ok
+                                      ? (tracked ? 'Takipten çıkarıldı' : 'Takip listesine eklendi')
+                                      : 'İşlem başarısız'),
+                                  duration: const Duration(seconds: 2),
+                                ));
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: (tracked ? AppColors.red500 : AppColors.primary)
+                                    .withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    tracked ? Icons.bookmark_remove_rounded : Icons.bookmark_add_rounded,
+                                    size: 16,
+                                    color: tracked ? AppColors.red500 : AppColors.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    tracked ? 'Çıkar' : 'Takip Et',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                                        color: tracked ? AppColors.red500 : AppColors.primary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Row(
+                        children: [
+                          Expanded(child: _detailCell(isDark, 'Son Fiyat',
+                              '₺${r.sellPrice.toStringAsFixed(2)}')),
+                          const SizedBox(width: 10),
+                          Expanded(child: _detailCell(isDark, 'Değişim',
+                              '${r.isUp ? '+' : ''}${r.changePercent.toStringAsFixed(2)}%',
+                              valueColor: r.isUp ? AppColors.green600 : AppColors.red500)),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(child: _detailCell(isDark, 'Alış', '₺${r.buyPrice.toStringAsFixed(2)}')),
+                          const SizedBox(width: 10),
+                          Expanded(child: _detailCell(isDark, 'Satış', '₺${r.sellPrice.toStringAsFixed(2)}')),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _detailCell(isDark, 'Güncellenme',
+                          '${r.updatedAt.hour.toString().padLeft(2, '0')}:${r.updatedAt.minute.toString().padLeft(2, '0')} · ${r.updatedAt.day}.${r.updatedAt.month}.${r.updatedAt.year}'),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _detailCell(bool isDark, String label, String value, {Color? valueColor}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.slate800 : AppColors.slate50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.slate400)),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold,
+              color: valueColor ?? (isDark ? Colors.white : AppColors.slate900))),
         ],
       ),
     );

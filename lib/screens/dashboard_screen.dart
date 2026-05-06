@@ -46,10 +46,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _onNavTap(int index) {
     setState(() => _selectedIndex = index);
-    // 0: Home (current), 1: Portfolio, 2: Activity
+    // 0: Home, 1: Yatırım, 2: Activity
     if (index == 1) {
       Navigator.push(context,
-          MaterialPageRoute(builder: (_) => const PortfolioScreen()));
+          MaterialPageRoute(builder: (_) => const TradingScreen()));
       setState(() => _selectedIndex = 0);
     } else if (index == 2) {
       Navigator.push(
@@ -1359,7 +1359,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       bool isDark, double bottomPadding) {
     final items = [
       (icon: Icons.home_rounded, label: l.home),
-      (icon: Icons.pie_chart_rounded, label: l.portfolio),
+      (icon: Icons.trending_up_rounded, label: 'Yatırım'),
       (icon: Icons.swap_horiz_rounded, label: l.activity),
     ];
 

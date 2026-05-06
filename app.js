@@ -741,6 +741,72 @@ app.post('/api/admin/users/:id/charge', authenticateToken, async (req, res) => {
 });
 
 // ==========================================================================
+// BILLS — User side
+// ==========================================================================
+
+// GET /api/bills  — user's pending + recent bills
+app.get('/api/bills', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    try {
+        const { rows } = await pool.query(
+            `SELECT id, category, amount, description, due_date, status, created_at
+             FROM bills WHERE user_id = $1 ORDER BY status ASC, due_date ASC`,
+            [userId]
+        );
+        res.json(rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Faturalar getirilemedi' });
+    }
+});
+
+// POST /api/bills/:id/pay  — pay a bill, deduct from TL wallet
+app.post('/api/bills/:id/pay', authenticateToken, async (req, res) => {
+    const userId = req.user.userId;
+    const billId = parseInt(req.params.id, 10);
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        const billRes = await client.query(
+            'SELECT * FROM bills WHERE id = $1 AND user_id = $2 AND status = \'pending\' FOR UPDATE',
+            [billId, userId]
+        );
+        if (!billRes.rows.length) throw new Error('Fatura bulunamadı veya zaten ödendi');
+        const bill = billRes.rows[0];
+
+        const walletRes = await client.query(
+            `SELECT wallet_id, balance FROM wallets WHERE owner_id = $1 AND wallet_type = 'TL' FOR UPDATE`,
+            [userId]
+        );
+        if (!walletRes.rows.length) throw new Error('Cüzdan bulunamadı');
+        const { wallet_id, balance } = walletRes.rows[0];
+        if (parseFloat(balance) < parseFloat(bill.amount)) throw new Error('Yetersiz bakiye');
+
+        await client.query('UPDATE wallets SET balance = balance - $1 WHERE wallet_id = $2', [bill.amount, wallet_id]);
+        await client.query('UPDATE bills SET status = \'paid\' WHERE id = $1', [billId]);
+        await client.query(
+            `INSERT INTO transactions (sender_id, sender_wallet_id, amount, description, type, status)
+             VALUES ($1, $2, $3, $4, 'BILL_PAYMENT', 'SUCCESS')`,
+            [userId, wallet_id, bill.amount, bill.description || `${bill.category} faturası`]
+        );
+        await client.query('COMMIT');
+
+        pool.query(
+            `INSERT INTO activities (owner_id, type, description) VALUES ($1, 'BILL_PAYMENT', $2)`,
+            [userId, bill.description || `${bill.category} faturası`]
+        ).catch(() => {});
+
+        res.json({ success: true, paid_amount: bill.amount });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err);
+        res.status(400).json({ error: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// ==========================================================================
 // PORTFOLIO & TRADING
 // ==========================================================================
 

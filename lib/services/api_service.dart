@@ -304,6 +304,22 @@ class ApiService {
     return await http.get(url, headers: _getHeaders(token));
   }
 
+  // ==========================================================================
+  // Bills — User
+  // ==========================================================================
+  Future<http.Response> getBills() async {
+    final token = await getToken();
+    return await http.get(Uri.parse('$baseUrl/api/bills'), headers: _getHeaders(token));
+  }
+
+  Future<http.Response> payBill(int billId) async {
+    final token = await getToken();
+    return await http.post(
+      Uri.parse('$baseUrl/api/bills/$billId/pay'),
+      headers: _getHeaders(token),
+    );
+  }
+
   Future<http.Response> adminIssueBill({
     required String userId,
     required String category,

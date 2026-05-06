@@ -291,6 +291,24 @@ app.post('/api/transactions/send', authenticateToken, async (req, res) => {
 
 
 // ==========================================================================
+// BIST STOCK LIST — fetched once at startup, searched locally (0 credits)
+// ==========================================================================
+let _bistList = []; // [{ symbol, name }]
+
+(async () => {
+    try {
+        const key = process.env.TWELVE_DATA_KEY;
+        const data = await fetch(
+            `https://api.twelvedata.com/stocks?exchange=BIST&apikey=${key}`
+        ).then(r => r.json());
+        _bistList = (data.data || []).map(s => ({ symbol: s.symbol, name: s.name }));
+        console.log(`BIST list loaded: ${_bistList.length} stocks`);
+    } catch (e) {
+        console.error('Failed to load BIST stock list:', e.message);
+    }
+})();
+
+// ==========================================================================
 // UNIFIED MARKET CACHE — one Twelve Data call covers forex + all stocks
 // TTL: 5 min. Promise-dedup prevents concurrent refreshes.
 // ==========================================================================
@@ -450,17 +468,14 @@ app.delete('/api/stocks/track/:symbol', authenticateToken, async (req, res) => {
     } catch (err) { console.error(err); res.status(500).json({ error: 'Could not untrack stock' }); }
 });
 
-// GET /api/stocks/search?q=   (Twelve Data symbol_search, BIST only)
-app.get('/api/stocks/search', authenticateToken, async (req, res) => {
-    const { q } = req.query;
-    if (!q || q.length < 2) return res.json([]);
-    try {
-        const key = process.env.TWELVE_DATA_KEY;
-        const data = await fetch(
-            `https://api.twelvedata.com/symbol_search?symbol=${encodeURIComponent(q)}&exchange=BIST&apikey=${key}`
-        ).then(r => r.json());
-        res.json((data.data || []).slice(0, 15).map(s => ({ symbol: s.symbol, name: s.instrument_name })));
-    } catch (err) { console.error(err); res.status(500).json({ error: 'Search failed' }); }
+// GET /api/stocks/search?q=   — local search, zero Twelve Data credits
+app.get('/api/stocks/search', authenticateToken, (req, res) => {
+    const q = (req.query.q || '').trim().toUpperCase();
+    if (q.length < 2) return res.json([]);
+    const results = _bistList
+        .filter(s => s.symbol.includes(q) || s.name.toUpperCase().includes(q))
+        .slice(0, 15);
+    res.json(results);
 });
 
 // --- GET TRANSACTIONS ---

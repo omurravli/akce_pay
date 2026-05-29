@@ -65,5 +65,14 @@
   "pendingBills": "Pending Bills",
   "noContact": "No contacts yet",
   "addFirst": "Add your first contact",
-  "settings": "Settings"
+  "settings": "Settings",
+  "akceChat": "AkçeChat",
+  "chatWelcome": "Hello! I am AkçeChat. How can I help you?",
+  "chatHint": "Type something or choose...",
+  "chatGoToMarket": "Go to market",
+  "chatGoToTransfer": "Send money",
+  "chatGoToBills": "Pay bills",
+  "chatGoToPortfolio": "Check my portfolio",
+  "chatGoToActivity": "Account activity",
+  "chatUnknown": "I couldn't understand you, please choose one of the options below."
 }

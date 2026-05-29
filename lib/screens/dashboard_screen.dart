@@ -20,6 +20,7 @@ import 'portfolio_screen.dart';
 import 'cashback_screen.dart';
 import 'admin_screen.dart';
 import 'login_screen.dart';
+import 'chat_bottom_sheet.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -64,6 +65,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  void _showChat() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => const ChatBottomSheet(),
+    );
+  }
+
   void _showAdminPinDialog(BuildContext context) {
     final pinController = TextEditingController();
     showDialog(
@@ -106,7 +116,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _showLoadBalanceDialog(BuildContext context, List<Wallet> wallets) {
-    final l = AppLocalizations.of(context)!;
+    final l = AppLocalizations.of(context);
     if (wallets.isEmpty) {
       showDialog(
         context: context,
@@ -190,7 +200,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
+    final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bottomPadding = MediaQuery.of(context).viewPadding.bottom;
 
@@ -199,6 +209,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
       bottomNavigationBar:
       _buildBottomNav(context, l, isDark, bottomPadding),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showChat,
+        backgroundColor: AppColors.primary,
+        shape: const CircleBorder(),
+        child: const Icon(Icons.smart_toy_rounded, color: Colors.white),
+      ),
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
@@ -213,7 +229,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _buildAdminEntry(context, l, isDark),
               _buildMonthlySpending(context, l, isDark),
               _buildRecentTransactions(context, l, isDark),
-              const SizedBox(height: 12),
+              const SizedBox(height: 80), // Space for FAB
             ],
           ),
         ),
@@ -335,7 +351,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Padding(
                 padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
-                  AppLocalizations.of(context)!.textSize,
+                  AppLocalizations.of(context).textSize,
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.slate400),
                 ),
               ),
@@ -364,7 +380,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.logout_rounded,
                     size: 18, color: AppColors.red500),
                 label: Text(
-                  AppLocalizations.of(context)!.logout,
+                  AppLocalizations.of(context).logout,
                   style: TextStyle(
                       color: AppColors.red500,
                       fontWeight: FontWeight.w600),
@@ -1230,7 +1246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   width: 42,
                                   height: 42,
                                   decoration: BoxDecoration(
-                                    color: isDark ? color.withValues(alpha: 0.2) : bg,
+                                    color: isDark ? color.withOpacity(0.2) : bg,
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(icon, color: color, size: 20),

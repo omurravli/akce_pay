@@ -65,5 +65,15 @@
   "pendingBills": "Bekleyen Faturalar",
   "noContact": "Henüz kişi yok",
   "addFirst": "İlk kişinizi ekleyin",
-  "settings": "Ayarlar"
+  "settings": "Ayarlar",
+  "akceChat": "AkçeChat",
+  "chatWelcome": "Merhaba! Ben AkçeChat. Size nasıl yardımcı olabilirim?",
+  "chatHint": "Bir şeyler yazın veya seçin...",
+  "chatGoToMarket": "Borsaya git",
+  "chatGoToTransfer": "Para gönder",
+  "chatGoToBills": "Fatura öde",
+  "chatGoToPortfolio": "Portföyüme bak",
+  "chatGoToActivity": "Hesap hareketleri",
+  "chatUnknown": "Sizi anlayamadım, lütfen aşağıdaki seçeneklerden birini seçin.",
+  "chatDidYouMean": "\"{label}\" mi demek istediniz?"
 }

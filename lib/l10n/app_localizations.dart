@@ -153,6 +153,11 @@ class AppLocalizations {
   String get chatUnknown => isTr ? 'Sizi anlayamadım, lütfen aşağıdaki seçeneklerden birini seçin.' : 'I couldn''t understand you, please choose one of the options below.';
   String chatDidYouMean(String label) => isTr ? '\"$label\" mi demek istediniz?' : 'Did you mean \"$label\"?';
 
+  // === Haberler / News ===
+  String get news => isTr ? 'Haberler' : 'News';
+  String get readMore => isTr ? 'Devamını Oku' : 'Read More';
+  String get chatGoToNews => isTr ? 'Haberleri gör' : 'See news';
+
   // === Yeni: Piyasalar / Trading ===
   String get market => isTr ? 'Piyasalar' : 'Markets';
   String get tradeBuySell => isTr ? 'Al / Sat' : 'Buy / Sell';

@@ -74,5 +74,10 @@
   "chatGoToBills": "Pay bills",
   "chatGoToPortfolio": "Check my portfolio",
   "chatGoToActivity": "Account activity",
-  "chatUnknown": "I couldn't understand you, please choose one of the options below."
+  "chatUnknown": "I couldn't understand you, please choose one of the options below.",
+  "chatDidYouMean": "Did you mean \"{label}\"?",
+  "news": "News",
+  "marketNews": "Market News",
+  "readMore": "Read More",
+  "chatGoToNews": "See news"
 }

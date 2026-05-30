@@ -75,5 +75,9 @@
   "chatGoToPortfolio": "Portföyüme bak",
   "chatGoToActivity": "Hesap hareketleri",
   "chatUnknown": "Sizi anlayamadım, lütfen aşağıdaki seçeneklerden birini seçin.",
-  "chatDidYouMean": "\"{label}\" mi demek istediniz?"
+  "chatDidYouMean": "\"{label}\" mi demek istediniz?",
+  "news": "Haberler",
+  "marketNews": "Borsa Haberleri",
+  "readMore": "Devamını Oku",
+  "chatGoToNews": "Haberleri gör"
 }

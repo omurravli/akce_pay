@@ -19,7 +19,7 @@ class _ChatBottomSheetState extends State<ChatBottomSheet> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  // Akıllı yönlendirme için bekleyen işlem takibi
+  // Pending navigation for affirmative confirmation
   String? _pendingRoute;
   String? _pendingLabel;
 
@@ -67,8 +67,7 @@ class _ChatBottomSheetState extends State<ChatBottomSheet> {
                            input == 'yes' || 
                            input == 'ok' || 
                            input == 'tamam' || 
-                           input == 'olur' ||
-                           input == 'onaylıyorum';
+                           input == 'olur';
 
       if (isAffirmative && _pendingRoute != null) {
         final route = _pendingRoute!;
@@ -88,6 +87,10 @@ class _ChatBottomSheetState extends State<ChatBottomSheet> {
         _pendingRoute = 'market';
         _pendingLabel = l.chatGoToMarket;
         _addBotMessage(l.chatDidYouMean(l.chatGoToMarket));
+      } else if (input.contains('haber') || input.contains('news') || input.contains('gündem')) {
+        _pendingRoute = 'news';
+        _pendingLabel = l.chatGoToNews;
+        _addBotMessage(l.chatDidYouMean(l.chatGoToNews));
       } else if (input.contains('gönder') || input.contains('transfer') || input.contains('send') || (input.contains('para') && !input.contains('yükle'))) {
         _pendingRoute = 'send';
         _pendingLabel = l.chatGoToTransfer;
@@ -138,6 +141,9 @@ class _ChatBottomSheetState extends State<ChatBottomSheet> {
       switch (route) {
         case 'market':
           destination = const TradingScreen();
+          break;
+        case 'news':
+          destination = const TradingScreen(initialTab: 3);
           break;
         case 'send':
           destination = const SendMoneyScreen();
@@ -249,6 +255,7 @@ class _ChatBottomSheetState extends State<ChatBottomSheet> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Row(
               children: [
+                _buildQuickAction(l.chatGoToNews, () => _handleNavigation('news', l.chatGoToNews)),
                 _buildQuickAction(l.chatGoToMarket, () => _handleNavigation('market', l.chatGoToMarket)),
                 _buildQuickAction(l.chatGoToTransfer, () => _handleNavigation('send', l.chatGoToTransfer)),
                 _buildQuickAction(l.chatGoToBills, () => _handleNavigation('bills', l.chatGoToBills)),
@@ -266,7 +273,6 @@ class _ChatBottomSheetState extends State<ChatBottomSheet> {
                     controller: _controller,
                     decoration: InputDecoration(
                       hintText: l.chatHint,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       filled: true,
                       fillColor: isDark ? AppColors.slate800 : AppColors.slate100,
                       border: OutlineInputBorder(

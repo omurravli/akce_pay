@@ -20,6 +20,20 @@ class DemoActivityEntry {
   });
 }
 
+class DemoNewsEntry {
+  final String title;
+  final String source;
+  final String time;
+  final String summary;
+
+  const DemoNewsEntry({
+    required this.title,
+    required this.source,
+    required this.time,
+    required this.summary,
+  });
+}
+
 class DemoData {
   static const String demoEmail = 'demo@akcepay.local';
   static const String demoPassword = 'demo1234';
@@ -100,6 +114,33 @@ class DemoData {
   static List<DemoActivityEntry> get demoActivities =>
       List<DemoActivityEntry>.from(_activities)
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+  static List<DemoNewsEntry> get demoNews => [
+    const DemoNewsEntry(
+      title: 'Borsa İstanbul haftaya yükselişle başladı',
+      source: 'Akçe Haber',
+      time: '1 saat önce',
+      summary: 'BIST 100 endeksi, güne %0,42 artışla 9.200 puandan başladı. Teknoloji hisselerindeki hareketlilik dikkat çekiyor.',
+    ),
+    const DemoNewsEntry(
+      title: 'Altın fiyatlarında yeni rekor beklentisi',
+      source: 'Finans Dünyası',
+      time: '3 saat önce',
+      summary: 'Ons altındaki küresel yükseliş, gram altını tetiklemeye devam ediyor. Analistler 4500 TL seviyesini işaret ediyor.',
+    ),
+    const DemoNewsEntry(
+      title: 'Merkez Bankası faiz kararı açıklandı',
+      source: 'Ekonomi Gazetesi',
+      time: '5 saat önce',
+      summary: 'Para Politikası Kurulu, politika faizini beklentiler dahilinde sabit bıraktı. Karar sonrası dolar/TL kurunda sakin seyir izleniyor.',
+    ),
+    const DemoNewsEntry(
+      title: 'THY bilançosunda dev kâr açıkladı',
+      source: 'Borsa Gündem',
+      time: 'Dün',
+      summary: 'Türk Hava Yolları, yılın üçüncü çeyreğinde beklentilerin üzerinde net kâr elde ettiğini duyurdu.',
+    ),
+  ];
 
   static void setDemoWallets(List<Wallet> wallets) {
     _wallets = List<Wallet>.from(wallets);

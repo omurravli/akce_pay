@@ -141,7 +141,24 @@ class AppLocalizations {
       isTr ? '3 fatura ödeme bekliyor' : '3 bills are awaiting payment';
   String get demoUserName => isTr ? 'Demo Kullanici' : 'Demo User';
 
-  // === Yeni: Borsa / Trading ===
+  // === Chatbot ===
+  String get akceChat => 'AkçeChat';
+  String get chatWelcome => isTr ? 'Merhaba! Ben AkçeChat. Size nasıl yardımcı olabilirim?' : 'Hello! I am AkçeChat. How can I help you?';
+  String get chatHint => isTr ? 'Bir şeyler yazın veya seçin...' : 'Type something or choose...';
+  String get chatGoToMarket => isTr ? 'Borsaya git' : 'Go to market';
+  String get chatGoToTransfer => isTr ? 'Para gönder' : 'Send money';
+  String get chatGoToBills => isTr ? 'Fatura öde' : 'Pay bills';
+  String get chatGoToPortfolio => isTr ? 'Portföyüme bak' : 'Check my portfolio';
+  String get chatGoToActivity => isTr ? 'Hesap hareketleri' : 'Account activity';
+  String get chatUnknown => isTr ? 'Sizi anlayamadım, lütfen aşağıdaki seçeneklerden birini seçin.' : 'I couldn''t understand you, please choose one of the options below.';
+  String chatDidYouMean(String label) => isTr ? '\"$label\" mi demek istediniz?' : 'Did you mean \"$label\"?';
+
+  // === Haberler / News ===
+  String get news => isTr ? 'Haberler' : 'News';
+  String get readMore => isTr ? 'Devamını Oku' : 'Read More';
+  String get chatGoToNews => isTr ? 'Haberleri gör' : 'See news';
+
+  // === Yeni: Piyasalar / Trading ===
   String get market => isTr ? 'Piyasalar' : 'Markets';
   String get tradeBuySell => isTr ? 'Al / Sat' : 'Buy / Sell';
   String get buy => isTr ? 'Al' : 'Buy';

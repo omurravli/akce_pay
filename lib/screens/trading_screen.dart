@@ -8,11 +8,13 @@ import '../providers/market_provider.dart';
 import '../providers/portfolio_provider.dart';
 import '../providers/stocks_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../services/demo_data.dart';
 
 class TradingScreen extends StatefulWidget {
-  const TradingScreen({super.key, this.initialSymbol});
+  const TradingScreen({super.key, this.initialSymbol, this.initialTab = 0});
 
   final String? initialSymbol;
+  final int initialTab;
 
   @override
   State<TradingScreen> createState() => _TradingScreenState();
@@ -27,7 +29,7 @@ class _TradingScreenState extends State<TradingScreen>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 3, vsync: this);
+    _tabs = TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
     _searchController.addListener(_onSearchChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MarketProvider>().fetchRates();
@@ -97,7 +99,7 @@ class _TradingScreenState extends State<TradingScreen>
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
+    final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -111,13 +113,15 @@ class _TradingScreenState extends State<TradingScreen>
         centerTitle: true,
         bottom: TabBar(
           controller: _tabs,
+          isScrollable: true,
           labelColor: AppColors.primary,
           unselectedLabelColor: AppColors.slate400,
           indicatorColor: AppColors.primary,
-          tabs: const [
-            Tab(text: 'Hisseler'),
-            Tab(text: 'Emtia & Döviz'),
-            Tab(text: 'Portföy'),
+          tabs: [
+            Tab(text: isDark ? 'Hisseler' : 'Hisseler'),
+            const Tab(text: 'Emtia & Döviz'),
+            Tab(text: l.portfolio),
+            Tab(text: l.news),
           ],
         ),
       ),
@@ -127,8 +131,51 @@ class _TradingScreenState extends State<TradingScreen>
           _buildStocksTab(isDark),
           _buildCommoditiesTab(l, isDark),
           _buildHoldingsTab(l, isDark),
+          _buildNewsTab(l, isDark),
         ],
       ),
+    );
+  }
+
+  // ── News tab ──────────────────────────────────────────────────────────
+  Widget _buildNewsTab(AppLocalizations l, bool isDark) {
+    final newsList = DemoData.demoNews;
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: newsList.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final news = newsList[index];
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.cardDark : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(news.source, style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+                  Text(news.time, style: const TextStyle(color: AppColors.slate400, fontSize: 11)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(news.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : AppColors.slate900)),
+              const SizedBox(height: 6),
+              Text(news.summary, style: const TextStyle(color: AppColors.slate500, fontSize: 13, height: 1.4)),
+              const SizedBox(height: 12),
+              GestureDetector(
+                onTap: () {},
+                child: Text(l.readMore, style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -235,7 +282,7 @@ class _TradingScreenState extends State<TradingScreen>
               Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: _colorFor(r.symbol).withValues(alpha: isDark ? 0.2 : 0.12),
+                  color: _colorFor(r.symbol).withOpacity(isDark ? 0.2 : 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -274,7 +321,7 @@ class _TradingScreenState extends State<TradingScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: (tracked ? AppColors.red500 : AppColors.primary).withValues(alpha: 0.1),
+                    color: (tracked ? AppColors.red500 : AppColors.primary).withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -315,7 +362,7 @@ class _TradingScreenState extends State<TradingScreen>
                 Container(
                   width: 40, height: 40,
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                    color: color.withOpacity(isDark ? 0.2 : 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(_iconFor(r.symbol), color: color, size: 20),
@@ -341,7 +388,7 @@ class _TradingScreenState extends State<TradingScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: (r.isUp ? AppColors.green500 : AppColors.red500).withValues(alpha: 0.15),
+                        color: (r.isUp ? AppColors.green500 : AppColors.red500).withOpacity(0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -419,7 +466,7 @@ class _TradingScreenState extends State<TradingScreen>
                         Container(
                           width: 52, height: 52,
                           decoration: BoxDecoration(
-                            color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                            color: color.withOpacity(isDark ? 0.2 : 0.12),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(_iconFor(r.symbol), color: color, size: 26),
@@ -457,7 +504,7 @@ class _TradingScreenState extends State<TradingScreen>
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
                                 color: (tracked ? AppColors.red500 : AppColors.primary)
-                                    .withValues(alpha: 0.1),
+                                    .withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Row(
@@ -592,7 +639,7 @@ class _TradingScreenState extends State<TradingScreen>
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: color.withValues(alpha: isDark ? 0.2 : 0.12),
+                color: color.withOpacity(isDark ? 0.2 : 0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(_iconFor(r.symbol), color: color, size: 22),
@@ -617,7 +664,7 @@ class _TradingScreenState extends State<TradingScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: (r.isUp ? AppColors.green500 : AppColors.red500)
-                    .withValues(alpha: 0.15),
+                    .withOpacity(0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(

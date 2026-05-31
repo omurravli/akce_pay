@@ -865,30 +865,53 @@ let _newsCache = null;
 let _newsCacheAt = 0;
 const NEWS_CACHE_TTL = 15 * 60_000;
 
+function _rssTag(block, tag) {
+    const r = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i');
+    const m = r.exec(block);
+    return m ? m[1].trim() : '';
+}
+
+function _parseRss(xml) {
+    const items = [];
+    const rx = /<item>([\s\S]*?)<\/item>/g;
+    let m;
+    while ((m = rx.exec(xml)) !== null) {
+        const b = m[1];
+        const rawTitle = _rssTag(b, 'title');
+        const link     = _rssTag(b, 'link');
+        const pubDate  = _rssTag(b, 'pubDate');
+        if (!rawTitle || !link) continue;
+        // Google News title format: "Article headline - Source Name"
+        const sep = rawTitle.lastIndexOf(' - ');
+        const title  = sep > 0 ? rawTitle.slice(0, sep).trim() : rawTitle;
+        const source = sep > 0 ? rawTitle.slice(sep + 3).trim() : 'Haber';
+        items.push({ title, source, url: link,
+            published_at: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString() });
+    }
+    return items;
+}
+
 async function fetchInvestmentNews() {
     const queries = [
-        'borsa istanbul bist100',
-        'türk lirası dolar kur',
+        'borsa istanbul',
+        'dolar türk lirası kur',
         'altın fiyat türkiye',
-        'türkiye ekonomi faiz enflasyon',
+        'türkiye ekonomi faiz',
     ];
     const seen = new Map();
     for (const q of queries) {
         try {
-            const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&newsCount=6&quotesCount=0&lang=tr`;
+            const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=tr&gl=TR&ceid=TR:tr`;
             const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-            const data = await res.json();
-            for (const n of (data?.news ?? [])) {
-                if (!seen.has(n.uuid)) seen.set(n.uuid, {
-                    title: n.title,
-                    source: n.publisher,
-                    url: n.link,
-                    published_at: new Date(n.providerPublishTime * 1000).toISOString(),
-                });
+            const xml = await res.text();
+            for (const item of _parseRss(xml)) {
+                if (!seen.has(item.url)) seen.set(item.url, item);
             }
-        } catch {}
+        } catch (e) { console.error('News fetch:', e.message); }
     }
-    return [...seen.values()].sort((a, b) => new Date(b.published_at) - new Date(a.published_at)).slice(0, 20);
+    return [...seen.values()]
+        .sort((a, b) => new Date(b.published_at) - new Date(a.published_at))
+        .slice(0, 20);
 }
 
 app.get('/api/news', authenticateToken, async (req, res) => {

@@ -307,7 +307,7 @@ class _ChatBottomSheetState extends State<ChatBottomSheet> {
         label: Text(label, style: const TextStyle(fontSize: 12)),
         onPressed: onTap,
         backgroundColor: isDark ? AppColors.slate800 : Colors.white,
-        side: BorderSide(color: AppColors.primary.withOpacity(0.5)),
+        side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       ),
     );

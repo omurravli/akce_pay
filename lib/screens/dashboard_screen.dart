@@ -132,7 +132,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final amountController = TextEditingController();
-    Wallet _selectedWalletInDialog = wallets.first;
+    Wallet selectedWalletInDialog = wallets.first;
 
     showDialog(
       context: context,
@@ -144,7 +144,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<Wallet>(
-                value: _selectedWalletInDialog,
+                // ignore: deprecated_member_use
+                value: selectedWalletInDialog,
                 decoration: InputDecoration(labelText: l.selectAccount),
                 items: wallets.map((w) => DropdownMenuItem(
                   value: w,
@@ -152,7 +153,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 )).toList(),
                 onChanged: (v) {
                   if (v != null) {
-                    setDialogState(() => _selectedWalletInDialog = v);
+                    setDialogState(() => selectedWalletInDialog = v);
                   }
                 },
               ),
@@ -176,7 +177,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   final messenger = ScaffoldMessenger.of(context);
                   final walletProvider = context.read<WalletProvider>();
                   final txProvider = context.read<TransactionProvider>();
-                  final walletId = _selectedWalletInDialog.walletId;
+                  final walletId = selectedWalletInDialog.walletId;
                   Navigator.pop(context);
                   final success = await walletProvider.loadBalance(
                     walletId: walletId,
@@ -298,7 +299,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         width: 38,
         height: 38,
         decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.08) : AppColors.slate100,
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : AppColors.slate100,
           shape: BoxShape.circle,
         ),
         child: Icon(
@@ -349,7 +350,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const Divider(),
               Padding(
-                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Text(
                   AppLocalizations.of(context).textSize,
                   style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.slate400),
@@ -368,9 +369,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               TextButton.icon(
                 onPressed: () async {
                   Navigator.pop(context);
+                  final nav = Navigator.of(context);
                   await context.read<AuthProvider>().logout();
                   if (mounted) {
-                    Navigator.of(context).pushAndRemoveUntil(
+                    nav.pushAndRemoveUntil(
                       MaterialPageRoute(
                           builder: (_) => const LoginScreen()),
                       (_) => false,
@@ -381,7 +383,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     size: 18, color: AppColors.red500),
                 label: Text(
                   AppLocalizations.of(context).logout,
-                  style: TextStyle(
+                  style: const TextStyle(
                       color: AppColors.red500,
                       fontWeight: FontWeight.w600),
                 ),
@@ -453,7 +455,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.3),
+              color: AppColors.primary.withValues(alpha: 0.3),
               blurRadius: 16,
               offset: const Offset(0, 6),
             ),
@@ -469,7 +471,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 height: 120,
                 decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.1)),
+                    color: Colors.white.withValues(alpha: 0.1)),
               ),
             ),
             Padding(
@@ -479,7 +481,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Text(l.totalBalance,
                       style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
+                          color: Colors.white.withValues(alpha: 0.85),
                           fontSize: 13,
                           fontWeight: FontWeight.w500)),
                   const SizedBox(height: 6),
@@ -496,7 +498,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -542,7 +544,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Positioned(
                 bottom: -20,
                 right: -20,
-                child: Icon(Icons.account_balance_wallet, size: 120, color: Colors.white.withOpacity(0.1)),
+                child: Icon(Icons.account_balance_wallet, size: 120, color: Colors.white.withValues(alpha: 0.1)),
               ),
               Padding(
                 padding: const EdgeInsets.all(24),
@@ -590,7 +592,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Positioned(
                 top: 20,
                 right: 20,
-                child: Text("VISA", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 20, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
+                child: Text("VISA", style: TextStyle(color: Colors.white.withValues(alpha: 0.5), fontSize: 20, fontWeight: FontWeight.bold, fontStyle: FontStyle.italic)),
               ),
               Padding(
                 padding: const EdgeInsets.all(24),
@@ -607,7 +609,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("VALID THRU", style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 8)),
+                            Text("VALID THRU", style: TextStyle(color: Colors.white.withValues(alpha: 0.6), fontSize: 8)),
                             const Text("12/26", style: TextStyle(color: Colors.white, fontSize: 12)),
                           ],
                         ),
@@ -729,9 +731,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: AppColors.primary.withOpacity(isDark ? 0.18 : 0.1),
+          color: AppColors.primary.withValues(alpha: isDark ? 0.18 : 0.1),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+          border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
         ),
         child: Row(
           children: [
@@ -837,7 +839,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   width: 24,
                                   height: 24,
                                   decoration: BoxDecoration(
-                                    color: color.withOpacity(
+                                    color: color.withValues(alpha: 
                                         isDark ? 0.2 : 0.12),
                                     shape: BoxShape.circle,
                                   ),
@@ -930,12 +932,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               begin: Alignment.centerLeft,
               end: Alignment.centerRight,
               colors: [
-                AppColors.primary.withOpacity(isDark ? 0.25 : 0.1),
-                AppColors.primaryDark.withOpacity(isDark ? 0.25 : 0.1),
+                AppColors.primary.withValues(alpha: isDark ? 0.25 : 0.1),
+                AppColors.primaryDark.withValues(alpha: isDark ? 0.25 : 0.1),
               ],
             ),
             border: Border.all(
-                color: AppColors.primary.withOpacity(0.3)),
+                color: AppColors.primary.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -1122,7 +1124,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               height: 42,
                               decoration: BoxDecoration(
                                 color: isDark
-                                    ? t.bg.withOpacity(0.35)
+                                    ? t.bg.withValues(alpha: 0.35)
                                     : t.bg,
                                 shape: BoxShape.circle,
                               ),
@@ -1246,7 +1248,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   width: 42,
                                   height: 42,
                                   decoration: BoxDecoration(
-                                    color: isDark ? color.withOpacity(0.2) : bg,
+                                    color: isDark ? color.withValues(alpha: 0.2) : bg,
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(icon, color: color, size: 20),
@@ -1376,15 +1378,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       decoration: BoxDecoration(
         color: isDark
-            ? AppColors.surfaceDark.withOpacity(0.95)
-            : Colors.white.withOpacity(0.95),
+            ? AppColors.surfaceDark.withValues(alpha: 0.95)
+            : Colors.white.withValues(alpha: 0.95),
         border: Border(
           top: BorderSide(
               color: isDark ? AppColors.slate700 : AppColors.slate200),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 16,
             offset: const Offset(0, -4),
           )
@@ -1456,7 +1458,7 @@ class _FontSizeControl extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.08) : AppColors.slate100,
+        color: isDark ? Colors.white.withValues(alpha: 0.08) : AppColors.slate100,
         borderRadius: BorderRadius.circular(24),
       ),
       child: Row(

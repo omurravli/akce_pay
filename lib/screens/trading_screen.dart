@@ -282,7 +282,7 @@ class _TradingScreenState extends State<TradingScreen>
               Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: _colorFor(r.symbol).withOpacity(isDark ? 0.2 : 0.12),
+                  color: _colorFor(r.symbol).withValues(alpha: isDark ? 0.2 : 0.12),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -321,7 +321,7 @@ class _TradingScreenState extends State<TradingScreen>
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: (tracked ? AppColors.red500 : AppColors.primary).withOpacity(0.1),
+                    color: (tracked ? AppColors.red500 : AppColors.primary).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
@@ -362,7 +362,7 @@ class _TradingScreenState extends State<TradingScreen>
                 Container(
                   width: 40, height: 40,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(isDark ? 0.2 : 0.12),
+                    color: color.withValues(alpha: isDark ? 0.2 : 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(_iconFor(r.symbol), color: color, size: 20),
@@ -388,7 +388,7 @@ class _TradingScreenState extends State<TradingScreen>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: (r.isUp ? AppColors.green500 : AppColors.red500).withOpacity(0.15),
+                        color: (r.isUp ? AppColors.green500 : AppColors.red500).withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -466,7 +466,7 @@ class _TradingScreenState extends State<TradingScreen>
                         Container(
                           width: 52, height: 52,
                           decoration: BoxDecoration(
-                            color: color.withOpacity(isDark ? 0.2 : 0.12),
+                            color: color.withValues(alpha: isDark ? 0.2 : 0.12),
                             shape: BoxShape.circle,
                           ),
                           child: Icon(_iconFor(r.symbol), color: color, size: 26),
@@ -504,7 +504,7 @@ class _TradingScreenState extends State<TradingScreen>
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                               decoration: BoxDecoration(
                                 color: (tracked ? AppColors.red500 : AppColors.primary)
-                                    .withOpacity(0.1),
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Row(
@@ -639,7 +639,7 @@ class _TradingScreenState extends State<TradingScreen>
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: color.withOpacity(isDark ? 0.2 : 0.12),
+                color: color.withValues(alpha: isDark ? 0.2 : 0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(_iconFor(r.symbol), color: color, size: 22),
@@ -664,7 +664,7 @@ class _TradingScreenState extends State<TradingScreen>
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
                 color: (r.isUp ? AppColors.green500 : AppColors.red500)
-                    .withOpacity(0.15),
+                    .withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(
@@ -788,7 +788,7 @@ class _TradingScreenState extends State<TradingScreen>
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                    color: color.withOpacity(isDark ? 0.2 : 0.12),
+                    color: color.withValues(alpha: isDark ? 0.2 : 0.12),
                     shape: BoxShape.circle),
                 child: Icon(_iconFor(h.symbol), color: color, size: 20),
               ),

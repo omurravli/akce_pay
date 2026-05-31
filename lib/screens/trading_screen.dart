@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
 import '../models/asset.dart';
@@ -8,7 +10,7 @@ import '../providers/market_provider.dart';
 import '../providers/portfolio_provider.dart';
 import '../providers/stocks_provider.dart';
 import '../providers/wallet_provider.dart';
-import '../services/demo_data.dart';
+import '../services/api_service.dart';
 
 class TradingScreen extends StatefulWidget {
   const TradingScreen({super.key, this.initialSymbol, this.initialTab = 0});
@@ -26,19 +28,45 @@ class _TradingScreenState extends State<TradingScreen>
   final _searchController = TextEditingController();
   Timer? _debounce;
 
+  List<NewsEntry> _news = [];
+  bool _newsLoading = false;
+  bool _newsFetched = false;
+
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 4, vsync: this, initialIndex: widget.initialTab);
     _searchController.addListener(_onSearchChanged);
+    _tabs.addListener(_onTabChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MarketProvider>().fetchRates();
       context.read<StocksProvider>().fetchAll();
+      if (widget.initialTab == 3) _fetchNews();
     });
+  }
+
+  void _onTabChanged() {
+    if (_tabs.index == 3 && !_newsFetched) _fetchNews();
+  }
+
+  Future<void> _fetchNews() async {
+    if (_newsLoading) return;
+    setState(() => _newsLoading = true);
+    try {
+      final res = await ApiService().getNews();
+      if (res.statusCode == 200 && mounted) {
+        final list = (jsonDecode(res.body) as List)
+            .map((j) => NewsEntry.fromJson(j as Map<String, dynamic>))
+            .toList();
+        setState(() { _news = list; _newsFetched = true; });
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _newsLoading = false);
   }
 
   @override
   void dispose() {
+    _tabs.removeListener(_onTabChanged);
     _tabs.dispose();
     _searchController.dispose();
     _debounce?.cancel();
@@ -139,43 +167,90 @@ class _TradingScreenState extends State<TradingScreen>
 
   // ── News tab ──────────────────────────────────────────────────────────
   Widget _buildNewsTab(AppLocalizations l, bool isDark) {
-    final newsList = DemoData.demoNews;
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: newsList.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final news = newsList[index];
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
+    if (_newsLoading && _news.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_news.isEmpty) {
+      return Center(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Icon(Icons.newspaper_rounded, size: 48, color: AppColors.slate400),
+          const SizedBox(height: 12),
+          const Text('Haberler yüklenemedi', style: TextStyle(color: AppColors.slate400)),
+          const SizedBox(height: 12),
+          ElevatedButton(onPressed: _fetchNews, child: const Text('Tekrar Dene')),
+        ]),
+      );
+    }
+    return RefreshIndicator(
+      onRefresh: _fetchNews,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: _news.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          final n = _news[index];
+          return Material(
             color: isDark ? AppColors.cardDark : Colors.white,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isDark ? AppColors.slate700 : AppColors.slate100),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(news.source, style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
-                  Text(news.time, style: const TextStyle(color: AppColors.slate400, fontSize: 11)),
-                ],
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () async {
+                final uri = Uri.tryParse(n.url);
+                if (uri != null && await canLaunchUrl(uri)) {
+                  await launchUrl(uri, mode: LaunchMode.externalApplication);
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: isDark ? AppColors.slate700 : AppColors.slate100),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(
+                          child: Text(n.source,
+                              style: const TextStyle(
+                                  color: AppColors.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                        Text(n.relativeTime,
+                            style: const TextStyle(
+                                color: AppColors.slate400, fontSize: 11)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(n.title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            height: 1.35,
+                            color: isDark ? Colors.white : AppColors.slate900)),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      const Icon(Icons.open_in_new_rounded,
+                          size: 12, color: AppColors.primary),
+                      const SizedBox(width: 4),
+                      Text(l.readMore,
+                          style: const TextStyle(
+                              color: AppColors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600)),
+                    ]),
+                  ],
+                ),
               ),
-              const SizedBox(height: 8),
-              Text(news.title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : AppColors.slate900)),
-              const SizedBox(height: 6),
-              Text(news.summary, style: const TextStyle(color: AppColors.slate500, fontSize: 13, height: 1.4)),
-              const SizedBox(height: 12),
-              GestureDetector(
-                onTap: () {},
-                child: Text(l.readMore, style: const TextStyle(color: AppColors.primary, fontSize: 12, fontWeight: FontWeight.w600)),
-              ),
-            ],
-          ),
-        );
-      },
+            ),
+          );
+        },
+      ),
     );
   }
 

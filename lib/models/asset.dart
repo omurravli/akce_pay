@@ -166,3 +166,32 @@ class AdminUserSummary {
     );
   }
 }
+
+class NewsEntry {
+  final String title;
+  final String source;
+  final String url;
+  final DateTime publishedAt;
+
+  NewsEntry({
+    required this.title,
+    required this.source,
+    required this.url,
+    required this.publishedAt,
+  });
+
+  factory NewsEntry.fromJson(Map<String, dynamic> json) => NewsEntry(
+        title: json['title'] as String,
+        source: json['source'] as String,
+        url: json['url'] as String,
+        publishedAt: DateTime.tryParse(json['published_at'] as String? ?? '') ??
+            DateTime.now(),
+      );
+
+  String get relativeTime {
+    final diff = DateTime.now().difference(publishedAt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes} dk önce';
+    if (diff.inHours < 24) return '${diff.inHours} saat önce';
+    return '${diff.inDays} gün önce';
+  }
+}

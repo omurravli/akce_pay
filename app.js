@@ -858,6 +858,54 @@ app.post('/api/bills/:id/pay', authenticateToken, async (req, res) => {
 });
 
 // ==========================================================================
+// NEWS
+// ==========================================================================
+
+let _newsCache = null;
+let _newsCacheAt = 0;
+const NEWS_CACHE_TTL = 15 * 60_000;
+
+async function fetchInvestmentNews() {
+    const queries = [
+        'borsa istanbul bist100',
+        'türk lirası dolar kur',
+        'altın fiyat türkiye',
+        'türkiye ekonomi faiz enflasyon',
+    ];
+    const seen = new Map();
+    for (const q of queries) {
+        try {
+            const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&newsCount=6&quotesCount=0&lang=tr`;
+            const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+            const data = await res.json();
+            for (const n of (data?.news ?? [])) {
+                if (!seen.has(n.uuid)) seen.set(n.uuid, {
+                    title: n.title,
+                    source: n.publisher,
+                    url: n.link,
+                    published_at: new Date(n.providerPublishTime * 1000).toISOString(),
+                });
+            }
+        } catch {}
+    }
+    return [...seen.values()].sort((a, b) => new Date(b.published_at) - new Date(a.published_at)).slice(0, 20);
+}
+
+app.get('/api/news', authenticateToken, async (req, res) => {
+    const now = Date.now();
+    if (_newsCache && now - _newsCacheAt < NEWS_CACHE_TTL) return res.json(_newsCache);
+    try {
+        _newsCache = await fetchInvestmentNews();
+        _newsCacheAt = Date.now();
+        res.json(_newsCache);
+    } catch (err) {
+        console.error(err);
+        if (_newsCache) return res.json(_newsCache);
+        res.status(500).json({ error: 'Haberler yüklenemedi' });
+    }
+});
+
+// ==========================================================================
 // CASHBACK — User side
 // ==========================================================================
 

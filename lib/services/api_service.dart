@@ -263,6 +263,11 @@ class ApiService {
     return await http.get(url, headers: _getHeaders(token));
   }
 
+  Future<http.Response> getNews() async {
+    final token = await getToken();
+    return await http.get(Uri.parse('$baseUrl/api/news'), headers: _getHeaders(token));
+  }
+
   Future<http.Response> getAdminSettings() async {
     final token = await getToken();
     return await http.get(Uri.parse('$baseUrl/api/admin/settings'), headers: _getHeaders(token));
